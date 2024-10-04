@@ -206,6 +206,7 @@ def display_game_info(games_df):
                 st.image(row['Away Team Logo'], width=50)
             else:
                 st.write(f"{row['Away Team']} logo not available.")
+
         st.markdown(f"<hr>", unsafe_allow_html=True)
 
 
