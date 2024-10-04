@@ -13,5 +13,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Make port 8080 available to the world outside this container
 EXPOSE 8080
 
-# Run streamlit app
-CMD ["streamlit", "run", "schedule.py", "--server.port=8080", "--server.enableCORS=false"]
+# Run Dash app (assumes your Dash app entry point is 'app.py')
+CMD ["python", "dash_app.py"]
