@@ -19,7 +19,7 @@ cache = Cache(app.server, config={
     'CACHE_TYPE': 'simple',  # or 'filesystem' for larger apps
     'CACHE_DEFAULT_TIMEOUT': 86400  # Cache for 24 hours
 })
-
+port = int(os.environ.get('PORT', 8080))
 # Constants for API details
 API_KEY = "8f5afa7092mshbb240e4143e782dp18eb0ajsn995280727cd5"
 NFL_EVENTS_URL = "https://nfl-api-data.p.rapidapi.com/nfl-events"
@@ -28,6 +28,8 @@ HEADERS = {
     "x-rapidapi-key": API_KEY,
     "x-rapidapi-host": "nfl-api-data.p.rapidapi.com"
 }
+# File path for storing last fetched odds
+ODDS_FILE_PATH = 'last_fetched_odds.json'
 
 # Interval for updating scores/time every 60 seconds
 interval_scores = dcc.Interval(
@@ -43,8 +45,6 @@ interval_odds = dcc.Interval(
     n_intervals=0
 )
 
-# File path for storing last fetched odds
-ODDS_FILE_PATH = 'last_fetched_odds.json'
 
 def save_last_fetched_odds():
     """Save the last fetched odds to a JSON file."""
@@ -72,12 +72,6 @@ def fetch_nfl_events():
         return response.json()
     else:
         return {}  # Return empty data if API call fails
-
-# Check to see if last_fetched_odds.json exists
-if os.path.exists(ODDS_FILE_PATH):
-    last_fetched_odds = load_last_fetched_odds()
-else:
-    last_fetched_odds = {}
 
 
 @cache.memoize(timeout=3600)
@@ -155,6 +149,12 @@ def extract_game_info(event):
     }
 
 
+# Check to see if last_fetched_odds.json exists
+if os.path.exists(ODDS_FILE_PATH):
+    last_fetched_odds = load_last_fetched_odds()
+else:
+    last_fetched_odds = {}
+
 # Dash layout setup
 app.layout = dbc.Container([
     interval_scores,  # Add scores interval
@@ -210,12 +210,14 @@ def update_week_options(n_intervals):
 
     return week_options, selected_value
 
+
 @app.callback(
     Output('selected-week', 'data'),  # Store selected week in dcc.Store
     [Input('week-selector', 'value')]
 )
 def store_selected_week(selected_week):
     return {'value': selected_week}  # Store the selected week
+
 
 @app.callback(
     Output('game-info', 'children'),
@@ -321,4 +323,4 @@ def display_game_info(stored_week_data, score_intervals, odds_intervals):
 
 
 if __name__ == "__main__":
-    app.run_server(debug=True)
+    app.run_server(debug=True, port=port)

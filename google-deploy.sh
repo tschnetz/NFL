@@ -5,6 +5,6 @@
 # Create a Dockerfile in the root of your project directory
 docker build -t nfl-app .
 # gcloud auth login
-gcloud config set project nfl-app-437604
-gcloud builds submit --tag gcr.io/nfl-app-437604/nfl-app
-gcloud run deploy streamlit-app --image gcr.io/nfl-app-437604/nfl-app --platform managed --region us-east1 --allow-unauthenticated
+gcloud config set project nfl-data-2024
+gcloud builds submit --tag gcr.io/nfl-data-2024/nfl-app
+gcloud run deploy nfl-app --image gcr.io/nfl-data-2024/nfl-app --platform managed --region us-east1 --allow-unauthenticated
