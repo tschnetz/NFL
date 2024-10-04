@@ -91,9 +91,9 @@ def fetch_espn_bet_odds(game_id, game_status):
 
         for item in odds_data.get('items', []):
             if item.get('provider', {}).get('id') == "58":  # ESPN BET Provider ID
-                last_fetched_odds[game_id] = item  # Store the fetched odds
+                last_fetched_odds[game_id] = item.get('spread', 'N/A')  # Store the fetched odds
                 save_last_fetched_odds()  # Save to file
-                return item  # Return the fetched odds
+                return item.get('spread', 'N/A')
     elif game_id not in last_fetched_odds:
         # Odds not available in the dictionary, fetch odds regardless of the game status
         print(f"Fetching ESPN BET odds for game ID: {game_id} as it is not in last fetched odds.")
@@ -103,13 +103,13 @@ def fetch_espn_bet_odds(game_id, game_status):
 
         for item in odds_data.get('items', []):
             if item.get('provider', {}).get('id') == "58":  # ESPN BET Provider ID
-                last_fetched_odds[game_id] = item  # Store the fetched odds
+                last_fetched_odds[game_id] = item.get('spread', 'N/A')  # Store the fetched odds
                 save_last_fetched_odds()  # Save to file
-                return item  # Return the fetched odds
+                return item.get('spread', 'N/A')
     else:
         # Return the last fetched odds if the game is in progress or final
         print(f"Returning last fetched odds for game ID: {game_id}")
-        return last_fetched_odds.get(game_id, None)  # Return last fetched odds if available
+        return last_fetched_odds[game_id]  # Return last fetched odds if available
 
     return None  # Return None if no odds are found
 
@@ -125,22 +125,16 @@ def extract_game_info(event):
     home_team = event['competitions'][0]['competitors'][0]['team']
     away_team = event['competitions'][0]['competitors'][1]['team']
 
+    # Get the game status (e.g., Scheduled, In Progress, Final)
     game_status = event['status']['type']['description']
+
+    # Fetch odds based on game status (fetch live odds if scheduled, retain last odds otherwise)
     game_id = event.get('id')
+    espn_bet_odds = fetch_espn_bet_odds(game_id, game_status)
 
-    # Fetch broadcast network
-    network = event['competitions'][0].get('broadcast', 'N/A')  # Adjust this line as per your API response
+    # Extract odds (spread) if available
+    odds = espn_bet_odds if isinstance(espn_bet_odds, (float, int)) else 'N/A'  # Handle float correctly
 
-    # Handle odds fetching based on game status
-    if game_status == 'Final':
-        # Fetch closing odds if the game is finished
-        espn_bet_odds = fetch_espn_bet_odds(game_id, game_status)
-        odds = espn_bet_odds['details'] if espn_bet_odds else 'N/A'
-        last_fetched_odds[game_id] = espn_bet_odds  # Store closing odds
-    else:
-        # Fetch odds based on current game status
-        espn_bet_odds = fetch_espn_bet_odds(game_id, game_status)
-        odds = espn_bet_odds['details'] if espn_bet_odds else 'N/A'
     return {
         'Home Team': home_team['displayName'],
         'Away Team': away_team['displayName'],
@@ -153,12 +147,13 @@ def extract_game_info(event):
         'Away Team Color': f"#{away_team.get('color', '000000')}",
         'Venue': event['competitions'][0]['venue']['fullName'],
         'Location': f"{event['competitions'][0]['venue']['address']['city']}",
+        'Network': event['competitions'][0].get('broadcast', 'N/A'),  # Include the broadcast network
         'Game Status': game_status,
         'Start Date (EST)': event_start_est_str,
-        'Network': network,
         'Quarter': event.get('status', {}).get('period', None),
         'Time Remaining': event.get('status', {}).get('displayClock', None),
     }
+
 
 # Dash layout setup
 app.layout = dbc.Container([
