@@ -176,7 +176,7 @@ def display_game_info(games_df):
             st.markdown(
                 f"""<div style='text-align: center;'>
                         <h4 style='color:{row['Home Team Color']}'>{row['Home Team']}</h4>
-                        <h5>{row['Home Team Score']}</h5>
+                        <h4>{row['Home Team Score']}</h4>
                     </div>""", unsafe_allow_html=True
             )
 
@@ -196,7 +196,7 @@ def display_game_info(games_df):
             st.markdown(
                 f"""<div style='text-align: center;'>
                         <h4 style='color:{row['Away Team Color']}; margin: 0;'>{row['Away Team']}</h4>
-                        <h5>{row['Away Team Score']}</h5>
+                        <h4>{row['Away Team Score']}</h4>
                     </div>""", unsafe_allow_html=True
             )
 
