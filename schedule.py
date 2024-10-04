@@ -8,7 +8,7 @@ from streamlit_autorefresh import st_autorefresh
 st.set_page_config(layout='wide')
 
 # Constants for API details
-API_KEY = "8f5afa7092mshbb240e4143e782dp18eb0ajsn995280727cd5"
+API_KEY = st.secrets["API_KEY"]
 NFL_EVENTS_URL = "https://nfl-api-data.p.rapidapi.com/nfl-events"
 ODDS_URL = "https://nfl-api-data.p.rapidapi.com/nfl-eventodds"
 HEADERS = {
