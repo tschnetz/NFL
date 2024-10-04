@@ -233,7 +233,7 @@ def get_cached_week_data(selected_week_data, selected_week_label):
 def main():
     """Main function to drive the Streamlit app."""
     # Automatically refresh every 30 seconds for ESPN data
-    count = st_autorefresh(interval=30000, limit=None, key="mycounter")
+    # count = st_autorefresh(interval=30000, limit=None, key="mycounter")
 
     # Query for static NFL events data (using caching)
     querystring = {"year": "2024"}
