@@ -32,7 +32,6 @@ def fetch_espn_bet_odds(game_id):
     querystring = {"id": game_id}
     response = requests.get(ODDS_URL, headers=HEADERS, params=querystring)
     odds_data = response.json()
-
     for item in odds_data.get('items', []):
         if item.get('provider', {}).get('id') == "58":  # ESPN BET Provider ID
             return item  # Return ESPN BET odds if found
@@ -93,6 +92,7 @@ def get_past_scores(event):
     closing_odds = fetch_rapid_api_closing_odds(game_id)
 
     return home_team_score, away_team_score, status, closing_odds
+
 
 def extract_game_info(event, week_label, use_rapid_api=False):
     """Extract all relevant game information from an event."""
@@ -161,6 +161,7 @@ def extract_game_info(event, week_label, use_rapid_api=False):
         'Odds': odds_details,  # Show closing odds for past games, ESPN odds for current/future games
     }
 
+
 def display_game_info(games_df):
     """Display the game information in a Streamlit dashboard."""
     for index, row in games_df.iterrows():
@@ -205,6 +206,7 @@ def display_game_info(games_df):
                 st.image(row['Away Team Logo'], width=50)
             else:
                 st.write(f"{row['Away Team']} logo not available.")
+        st.markdown(f"<hr>", unsafe_allow_html=True)
 
 
 # Cache the selected week's data to avoid re-fetching from Rapid API
