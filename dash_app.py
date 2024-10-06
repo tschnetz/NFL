@@ -129,6 +129,9 @@ def extract_game_info(event):
     game_id = event.get('id')
     odds = fetch_espn_bet_odds(game_id, game_status)
 
+    # Extract overall records from the statistics
+    home_team_record = event['competitions'][0]['competitors'][0]['records'][0]['summary']
+    away_team_record = event['competitions'][0]['competitors'][1]['records'][0]['summary']
 
     return {
         'Home Team': home_team['displayName'],
@@ -147,6 +150,8 @@ def extract_game_info(event):
         'Start Date (EST)': event_start_est_str,
         'Quarter': event.get('status', {}).get('period', None),
         'Time Remaining': event.get('status', {}).get('displayClock', None),
+        'Home Team Record': home_team_record,  # Added home team record
+        'Away Team Record': away_team_record  # Added away team record
     }
 
 
@@ -160,7 +165,7 @@ else:
 app.layout = dbc.Container([
     interval_scores,  # Add scores interval
     interval_odds,    # Add odds interval
-    dbc.Row(dbc.Col(html.H1("NFL Real-Time Game Updates"), className="text-center")),
+    dbc.Row(dbc.Col(html.H1("NFL Games"), className="text-center")),
     dcc.Store(id='selected-week', data={'value': None}),  # Store selected week in dcc.Store
     dbc.Row(dbc.Col(dcc.Dropdown(id='week-selector', options=[], placeholder="Select a week"))),
     dbc.Row(
@@ -283,6 +288,7 @@ def display_game_info(stored_week_data, score_intervals, odds_intervals):
                 dbc.Col(
                     html.Div([
                         html.H4(game_info['Home Team'], style={'color': game_info['Home Team Color']}),
+                        html.P(f"{game_info['Home Team Record']}", style={'margin': '0', 'padding': '0'}),
                         html.H4(f"{game_info['Home Team Score']}" if game_info['Game Status'] != 'Scheduled' else "")
                     ], style={'text-align': 'center'}),
                     width=3
@@ -303,6 +309,7 @@ def display_game_info(stored_week_data, score_intervals, odds_intervals):
                 dbc.Col(
                     html.Div([
                         html.H4(game_info['Away Team'], style={'color': game_info['Away Team Color']}),
+                        html.P(f"{game_info['Away Team Record']}", style={'margin': '0', 'padding': '0'}),
                         html.H4(f"{game_info['Away Team Score']}" if game_info['Game Status'] != 'Scheduled' else "")
                     ], style={'text-align': 'center'}),
                     width=3
