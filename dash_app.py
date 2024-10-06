@@ -1,14 +1,17 @@
-import os
-
 import dash
 from dash import dcc, html
+import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output
+from datetime import datetime, timezone
+from dotenv import load_dotenv
+from flask_caching import Cache
 import json
+import os
 import requests
 import pytz
-from datetime import datetime, timezone
-import dash_bootstrap_components as dbc
-from flask_caching import Cache
+
+
+load_dotenv()
 
 # Dash setup
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
@@ -21,7 +24,7 @@ cache = Cache(app.server, config={
 })
 port = int(os.environ.get('PORT', 8080))
 # Constants for API details
-API_KEY = "8f5afa7092mshbb240e4143e782dp18eb0ajsn995280727cd5"
+API_KEY = os.getenv("API_KEY")
 NFL_EVENTS_URL = "https://nfl-api-data.p.rapidapi.com/nfl-events"
 ODDS_URL = "https://nfl-api-data.p.rapidapi.com/nfl-eventodds"
 HEADERS = {
@@ -62,7 +65,7 @@ def load_last_fetched_odds():
 
 
 # Function to fetch NFL events data
-@cache.memoize(timeout=3600)  # Cache for 1 hour
+@cache.memoize(timeout=60)  # Cache for 1 hour
 def fetch_nfl_events():
     print('Fetching NFL Data from API')
     querystring = {"year": "2024"}
@@ -85,9 +88,9 @@ def fetch_espn_bet_odds(game_id, game_status):
 
         for item in odds_data.get('items', []):
             if item.get('provider', {}).get('id') == "58":  # ESPN BET Provider ID
-                last_fetched_odds[game_id] = item.get('spread', 'N/A')  # Store the fetched odds
+                last_fetched_odds[game_id] = item.get('details', 'N/A')  # Store the fetched odds
                 save_last_fetched_odds()  # Save to file
-                return item.get('spread', 'N/A')
+                return item.get('details', 'N/A')
     elif game_id not in last_fetched_odds:
         # Odds not available in the dictionary, fetch odds regardless of the game status
         print(f"Fetching ESPN BET odds for game ID: {game_id} as it is not in last fetched odds.")
@@ -97,9 +100,9 @@ def fetch_espn_bet_odds(game_id, game_status):
 
         for item in odds_data.get('items', []):
             if item.get('provider', {}).get('id') == "58":  # ESPN BET Provider ID
-                last_fetched_odds[game_id] = item.get('spread', 'N/A')  # Store the fetched odds
+                last_fetched_odds[game_id] = item.get('details', 'N/A')  # Store the fetched odds
                 save_last_fetched_odds()  # Save to file
-                return item.get('spread', 'N/A')
+                return item.get('details', 'N/A')
     else:
         # Return the last fetched odds if the game is in progress or final
         print(f"Returning last fetched odds for game ID: {game_id}")
@@ -124,10 +127,8 @@ def extract_game_info(event):
 
     # Fetch odds based on game status (fetch live odds if scheduled, retain last odds otherwise)
     game_id = event.get('id')
-    espn_bet_odds = fetch_espn_bet_odds(game_id, game_status)
+    odds = fetch_espn_bet_odds(game_id, game_status)
 
-    # Extract odds (spread) if available
-    odds = espn_bet_odds if isinstance(espn_bet_odds, (float, int)) else 'N/A'  # Handle float correctly
 
     return {
         'Home Team': home_team['displayName'],
@@ -242,11 +243,12 @@ def display_game_info(stored_week_data, score_intervals, odds_intervals):
     week_data = None  # This variable holds the found week data
     week_counter = 0
 
+    # Find the selected week data
     for period in calendar_data:
         if 'entries' in period:
             for week in period['entries']:
                 if week_counter == selected_week_index:
-                    week_data = week  # Assign found week to week_data
+                    week_data = week
                     break
                 week_counter += 1
 
@@ -255,8 +257,6 @@ def display_game_info(stored_week_data, score_intervals, odds_intervals):
 
     if not week_data:
         return html.P("Selected week data not found.")
-    else:
-        print(f"Selected week data: {week_data}")
 
     week_start = datetime.fromisoformat(week_data['startDate'][:-1]).replace(tzinfo=timezone.utc)
     week_end = datetime.fromisoformat(week_data['endDate'][:-1]).replace(tzinfo=timezone.utc)
@@ -267,23 +267,22 @@ def display_game_info(stored_week_data, score_intervals, odds_intervals):
         if week_start <= datetime.fromisoformat(event['date'][:-1]).replace(tzinfo=timezone.utc) <= week_end
     ]
 
-    print(f"Filtered games: {len(selected_week_games)} games found for the week")
+    # Sort the games based on their status
+    sorted_games = sorted(selected_week_games, key=lambda x: (
+        x['status']['type']['description'] == 'Final',  # Place Final last
+        x['status']['type']['description'] == 'Scheduled',  # Place Scheduled next
+    ))
 
     games_info = []
-    for game in selected_week_games:
-        # Extract game information, including updating odds
+    for game in sorted_games:
         game_info = extract_game_info(game)
 
         games_info.append(
             dbc.Row([
-                dbc.Col(
-                    html.Img(src=game_info['Home Team Logo'], height="50px"),
-                    width=1, style={'text-align': 'center'}
-                ),
+                dbc.Col(html.Img(src=game_info['Home Team Logo'], height="50px"), width=1, style={'text-align': 'center'}),
                 dbc.Col(
                     html.Div([
                         html.H4(game_info['Home Team'], style={'color': game_info['Home Team Color']}),
-                        # Only show the score if the game is not scheduled
                         html.H4(f"{game_info['Home Team Score']}" if game_info['Game Status'] != 'Scheduled' else "")
                     ], style={'text-align': 'center'}),
                     width=3
@@ -291,9 +290,8 @@ def display_game_info(stored_week_data, score_intervals, odds_intervals):
                 dbc.Col(
                     html.Div([
                         html.H5(game_info['Game Status']),
-                        # Check if the game is not Final before displaying quarter/time
                         (html.H6(f"{game_info['Quarter']} Qtr, {game_info['Time Remaining']} remaining")
-                        if game_info['Game Status'] != 'Final' and game_info['Quarter'] else ""),
+                         if game_info['Game Status'] == 'In Progress' else ""),
                         html.H6(game_info['Odds']) if game_info['Odds'] else "",
                         html.P(game_info['Start Date (EST)'], style={'margin': '0', 'padding': '0'}),
                         html.P(game_info['Venue'], style={'margin': '0', 'padding': '0'}),
@@ -305,15 +303,11 @@ def display_game_info(stored_week_data, score_intervals, odds_intervals):
                 dbc.Col(
                     html.Div([
                         html.H4(game_info['Away Team'], style={'color': game_info['Away Team Color']}),
-                        # Only show the score if the game is not scheduled
                         html.H4(f"{game_info['Away Team Score']}" if game_info['Game Status'] != 'Scheduled' else "")
                     ], style={'text-align': 'center'}),
                     width=3
                 ),
-                dbc.Col(
-                    html.Img(src=game_info['Away Team Logo'], height="50px"),
-                    width=1, style={'text-align': 'center'}
-                )
+                dbc.Col(html.Img(src=game_info['Away Team Logo'], height="50px"), width=1, style={'text-align': 'center'})
             ], className="game-row", style={'padding': '10px'})
         )
 
