@@ -36,14 +36,14 @@ HEADERS = {
 ODDS_FILE_PATH = 'last_fetched_odds.json'
 
 # Interval for updating scores/time every 60 seconds
-interval_scores = dcc.Interval(
+INTERVAL_SCORES = dcc.Interval(
     id='interval-scores',
     interval=60 * 1000,  # 60 seconds
     n_intervals=0
 )
 
 # Interval for updating odds every hour
-interval_odds = dcc.Interval(
+INTERVAL_ODDS = dcc.Interval(
     id='interval-odds',
     interval=60 * 60 * 1000,  # 1 hour
     n_intervals=0
@@ -66,7 +66,7 @@ def load_last_fetched_odds():
 
 
 # Function to fetch NFL events data
-@cache.memoize(timeout=60)  # Cache for 1 hour
+@cache.memoize(timeout=60)
 def fetch_nfl_events():
     # print('Fetching NFL Data from API')
     querystring = {"year": "2024"}
@@ -254,7 +254,6 @@ def display_game_info(selected_week_index, scores_data):
     if not triggered_by_week_selection and (not scores_data or not any(scores_data)):
         raise dash.exceptions.PreventUpdate  # Prevent update if not triggered by week selection or if scores_data is empty
 
-    # print("Inital display_game_info selected_week_index:", selected_week_index)
     data = fetch_nfl_events()
     leagues_data = data.get('leagues', [])
 
@@ -501,16 +500,12 @@ def display_scoring_plays(n_clicks_list, button_ids):
     return outputs
 
 
-# Check to see if last_fetched_odds.json exists
-if os.path.exists(ODDS_FILE_PATH):
-    last_fetched_odds = load_last_fetched_odds()
-else:
-    last_fetched_odds = {}
 
+last_fetched_odds = load_last_fetched_odds()
 # Dash layout setup
 app.layout = dbc.Container([
-    interval_scores,  # Add scores interval
-    interval_odds,    # Add odds interval
+    INTERVAL_SCORES,  # Add scores interval
+    INTERVAL_ODDS,    # Add odds interval
     dbc.Row(dbc.Col(html.H1("NFL Games"), className="text-center")),
     dcc.Store(id='in-progress-flag', data=False),  # Store to track if games are in progress
     dcc.Store(id='selected-week', data={'value': None}),  # Store selected week in dcc.Store

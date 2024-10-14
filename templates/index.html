@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NFL Games</title>
+</head>
+<body>
+    <h1>NFL Games</h1>
+
+    <!-- Week Selector -->
+    <label for="week-selector">Select a Week:</label>
+    <select id="week-selector" onchange="fetchWeekGames()">
+        <option value="">Select a week</option>
+    </select>
+    <p id="status-message"></p> <!-- Placeholder for status messages -->
+
+    <!-- Game Info -->
+    <div id="game-info"></div>
+
+    <script>
+        // Function to fetch and populate week options in the dropdown
+        async function fetchNFLWeeks() {
+            try {
+                document.getElementById('status-message').textContent = "Fetching weeks...";
+                const response = await fetch('http://127.0.0.1:8000/nfl-weeks');
+
+                if (!response.ok) {
+                    throw new Error(`Network response was not OK: ${response.status}`);
+                }
+
+                const weeksData = await response.json();
+                console.log("Weeks data fetched from API:", weeksData);  // Log the data to ensure it’s correct
+
+                const weekSelector = document.getElementById('week-selector');
+
+                // Check if data is empty
+                if (weeksData.length === 0) {
+                    document.getElementById('status-message').textContent = "No weeks available.";
+                    console.error("No weeks data returned.");
+                    return;
+                }
+
+                // Iterate through each phase (Preseason, Regular Season, etc.)
+                weeksData.forEach(phase => {
+                    console.log("Processing phase:", phase.label);  // Log each phase
+
+                    // Iterate through the weeks in each phase (the "entries" array)
+                    phase.entries.forEach(week => {
+                        console.log("Adding week:", week.label);  // Log each week being added
+                        const option = document.createElement('option');
+                        option.value = week.label;  // Use the week label (unique for each week)
+                        option.text = `${phase.label}: ${week.label} (${week.startDate} - ${week.endDate})`;
+                        weekSelector.appendChild(option);
+                    });
+                });
+
+                document.getElementById('status-message').textContent = "Weeks loaded successfully.";
+
+            } catch (error) {
+                console.error("Error fetching weeks:", error);
+                document.getElementById('status-message').textContent = "Error fetching weeks. See console for details.";
+            }
+        }
+
+        // Function to fetch games for the selected week
+        async function fetchWeekGames() {
+            const weekValue = document.getElementById('week-selector').value;
+            if (!weekValue) {
+                document.getElementById('game-info').innerHTML = '';
+                return;
+            }
+
+            console.log(`Selected week value: ${weekValue}`);
+
+            // Display the "Loading" message
+            document.getElementById('game-info').innerHTML = `<p>Loading games for ${weekValue}...</p>`;
+
+            try {
+                // Fetch the games for the selected week from FastAPI
+                const response = await fetch(`http://127.0.0.1:8000/nfl-events?week=${weekValue}`);
+
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch games for week ${weekValue}: ${response.statusText}`);
+                }
+
+                const games = await response.json();
+                console.log("Games for selected week:", games);
+
+                // Display the games
+                if (games.length === 0) {
+                    document.getElementById('game-info').innerHTML = `<p>No games found for week ${weekValue}.</p>`;
+                } else {
+                    let gamesHTML = "<ul>";
+                    games.forEach(game => {
+                        gamesHTML += `<li>${game.game}</li>`;
+                    });
+                    gamesHTML += "</ul>";
+                    document.getElementById('game-info').innerHTML = gamesHTML;
+                }
+
+            } catch (error) {
+                console.error("Error fetching games:", error);
+                document.getElementById('game-info').innerHTML = `<p>Error loading games for ${weekValue}. See console for details.</p>`;
+            }
+        }
+
+        // Fetch weeks on page load
+        window.onload = function() {
+            fetchNFLWeeks();  // Load the NFL week options on page load
+        };
+    </script>
+</body>
+</html>

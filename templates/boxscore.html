@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Boxscore</title>
+</head>
+<body>
+    <h1>Boxscore for Game {{ game_id }}</h1>
+    <div id="boxscore-info"></div>
+
+    <script>
+        async function fetchBoxscore() {
+            const gameId = "{{ game_id }}";
+            const response = await fetch(`http://127.0.0.1:8000/odds/${gameId}`);
+            const data = await response.json();
+            console.log(data);
+            // Render the boxscore data in the HTML here
+        }
+
+        window.onload = function() {
+            fetchBoxscore();
+        };
+    </script>
+</body>
+</html>
