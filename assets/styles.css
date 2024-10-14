@@ -1,26 +1,32 @@
+/* General body styling */
 body {
-  font-family: 'Open Sans', sans-serif;
+  font-family: 'Verdana', sans-serif;
 }
 
+/* Game row styling */
 .game-row {
   border-bottom: 1px solid #ddd; /* Add a subtle separator */
   padding: 15px 0; /* Increase spacing */
   transition: background-color 0.2s; /* Smooth transition for hover effect */
 }
 
+/* Hover effect on the game row */
 .game-row:hover {
-  background-color: #f5f5f5; /* Light gray background on hover */
+  background-color: cornflowerblue; /* Light blue background on hover */
 }
 
+/* Styling for odd game rows */
 .game-row:nth-child(odd) {
   background-color: #f9f9f9; /* Slightly different background for odd rows */
 }
 
+/* Styling for images in game row */
 .game-row img {
   border: 0px solid #ddd; /* Add a border to logos */
   border-radius: 5px; /* Slightly rounded corners for logos */
 }
 
+/* Scoring plays section */
 .scoring-plays {
   background-color: #f0f0f0; /* Light background for scoring plays */
   padding: 10px;
@@ -28,6 +34,27 @@ body {
   margin-top: 5px;
 }
 
+/* Font style for scoring plays */
 .scoring-plays .row {
   font-family: monospace; /* Use monospace font for play text */
+}
+
+/* Button styling inside the game-row */
+/* More specific button styling for dash-bootstrap-components */
+button.dash-bootstrap {
+  background-color: #f0f0f0 !important; /* Default button background color */
+  border: none !important; /* Remove default border */
+  color: black !important; /* Text color */
+  padding: 15px 20px !important; /* Padding inside the button */
+  text-align: left !important; /* Align text to the left */
+  width: 100% !important; /* Ensure the button takes up the full width */
+  cursor: pointer !important; /* Change the cursor to pointer on hover */
+  transition: background-color 0.3s ease !important; /* Smooth transition for background color on hover */
+  display: block !important; /* Make the button block level */
+}
+
+/* Hover state for the buttons */
+button.dash-bootstrap:hover {
+  background: linear-gradient(90deg, var(--team-home-color), var(--team-away-color)) !important;
+  color: black !important; /* Keep text white */
 }

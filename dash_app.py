@@ -305,7 +305,8 @@ def display_game_info(selected_week_index, scores_data):
     for game in sorted_games:
         game_info = extract_game_info(game)
         game_id = game.get('id')
-
+        home_color = game_info['Home Team Color']
+        away_color = game_info['Away Team Color']
         # Update scores from scores_data
         if scores_data:
             for score_data in scores_data:
@@ -356,8 +357,14 @@ def display_game_info(selected_week_index, scores_data):
                 id={'type': 'game-button', 'index': game_id},  # Unique ID for each game button
                 n_clicks=0,
                 color='light',
-                style={'width': '100%', 'text-align': 'left'},
-                value=game_id  # Pass the game_id as the button's value
+                className='dash-bootstrap',
+                style={
+                    '--team-home-color': home_color,  # Pass team home color
+                    '--team-away-color': away_color,  # Pass team away color
+                    'width': '100%',
+                    'text-align': 'left'
+                },
+                value=game_id,  # Pass the game_id as the button's value
             )
         )
         games_info.append(html.Div(id={'type': 'scoring-plays', 'index': game_id}, children=[]))
