@@ -317,7 +317,7 @@ def display_game_info(selected_week_index, scores_data):
         games_info.append(
             dbc.Button(
                 dbc.Row([
-                    dbc.Col(html.Img(src=game_info['Home Team Logo'], height="50px"), width=1,
+                    dbc.Col(html.Img(src=game_info['Home Team Logo'], height="60px"), width=1,
                             style={'text-align': 'center'}),
                     dbc.Col(
                         html.Div([
@@ -350,7 +350,7 @@ def display_game_info(selected_week_index, scores_data):
                         ], style={'text-align': 'center'}),
                         width=3
                     ),
-                    dbc.Col(html.Img(src=game_info['Away Team Logo'], height="50px"), width=1,
+                    dbc.Col(html.Img(src=game_info['Away Team Logo'], height="60px"), width=1,
                             style={'text-align': 'center'}),
                 ], className="game-row", style={'padding': '10px'}),
                 id={'type': 'game-button', 'index': game_id},  # Unique ID for each game button

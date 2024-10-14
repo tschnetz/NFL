@@ -1,0 +1,33 @@
+body {
+  font-family: 'Open Sans', sans-serif;
+}
+
+.game-row {
+  border-bottom: 1px solid #ddd; /* Add a subtle separator */
+  padding: 15px 0; /* Increase spacing */
+  transition: background-color 0.2s; /* Smooth transition for hover effect */
+}
+
+.game-row:hover {
+  background-color: #f5f5f5; /* Light gray background on hover */
+}
+
+.game-row:nth-child(odd) {
+  background-color: #f9f9f9; /* Slightly different background for odd rows */
+}
+
+.game-row img {
+  border: 0px solid #ddd; /* Add a border to logos */
+  border-radius: 5px; /* Slightly rounded corners for logos */
+}
+
+.scoring-plays {
+  background-color: #f0f0f0; /* Light background for scoring plays */
+  padding: 10px;
+  border-radius: 5px;
+  margin-top: 5px;
+}
+
+.scoring-plays .row {
+  font-family: monospace; /* Use monospace font for play text */
+}
