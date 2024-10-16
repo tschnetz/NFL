@@ -6,8 +6,8 @@
   <component name="ChangeListManager">
     <list default="true" id="201b6f89-e04e-4cfe-9f18-6b6b0c30beb0" name="Changes" comment="Fixed callbacks">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/styles.css" beforeDir="false" afterPath="$PROJECT_DIR$/assets/styles.css" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/dash_app.py" beforeDir="false" afterPath="$PROJECT_DIR$/dash_app.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/last_fetched_odds.json" beforeDir="false" afterPath="$PROJECT_DIR$/last_fetched_odds.json" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -121,6 +121,8 @@
       <workItem from="1728921441615" duration="2358000" />
       <workItem from="1728923908886" duration="837000" />
       <workItem from="1728927589164" duration="3552000" />
+      <workItem from="1729103916688" duration="96000" />
+      <workItem from="1729104611288" duration="7697000" />
     </task>
     <task id="LOCAL-00001" summary="Fixed callbacks">
       <option name="closed" value="true" />
@@ -158,6 +160,6 @@
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/NFL$dash_app.coverage" NAME="dash_app Coverage Results" MODIFIED="1728500824730" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/NFL$NFL.coverage" NAME="NFL Coverage Results" MODIFIED="1728930581706" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
+    <SUITE FILE_PATH="coverage/NFL$NFL.coverage" NAME="NFL Coverage Results" MODIFIED="1729111682863" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
   </component>
 </project>

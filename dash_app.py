@@ -27,7 +27,8 @@ port = int(os.environ.get('PORT', 8080))
 API_KEY = os.getenv("API_KEY")
 NFL_EVENTS_URL = "https://nfl-api-data.p.rapidapi.com/nfl-events"
 ODDS_URL = "https://nfl-api-data.p.rapidapi.com/nfl-eventodds"
-SCORING_URL = "https://nfl-api-data.p.rapidapi.com/nfl-scoringplays"
+SCORINGPLAYS_URL = "https://nfl-api-data.p.rapidapi.com/nfl-scoringplays"
+SCOREBOARD_URL = "https://nfl-api-data.p.rapidapi.com/nfl-single-events"
 HEADERS = {
     "x-rapidapi-key": API_KEY,
     "x-rapidapi-host": "nfl-api-data.p.rapidapi.com"
@@ -71,6 +72,18 @@ def fetch_nfl_events():
     # print('Fetching NFL Data from API')
     querystring = {"year": "2024"}
     response = requests.get(NFL_EVENTS_URL, headers=HEADERS, params=querystring)
+
+    if response.status_code == 200:
+        return response.json()
+    else:
+        return {}  # Return empty data if API call fails
+
+
+@cache.memoize(timeout=60)
+def fetch_game_scoreboard(game_id):
+    # print('Fetching NFL Data from API')
+    querystring = {"id":game_id}
+    response = requests.get(SCOREBOARD_URL, headers=HEADERS, params=querystring)
 
     if response.status_code == 200:
         return response.json()
@@ -160,6 +173,7 @@ def extract_game_info(event):
     Output('week-selector', 'options'),
     Output('week-options-store', 'data'),
     Output('week-selector', 'value'),
+    Output('nfl-events-data', 'data'),  # Store NFL events data here
     [Input('week-options-store', 'data')]
 )
 def update_week_options(week_options_fetched):
@@ -168,38 +182,38 @@ def update_week_options(week_options_fetched):
     if week_options_fetched or week_options:  # Check if already fetched or if week_options is not empty
         raise dash.exceptions.PreventUpdate
 
-    # print("Initial update_week_options")
+    # Fetch NFL events once and store them
     data = fetch_nfl_events()
     leagues_data = data.get('leagues', [])
 
+    if not leagues_data:
+        return [], False, None, {}
+
+    nfl_league = leagues_data[0]
+    calendar_data = nfl_league.get('calendar', [])
     week_options = []
     selected_value = None
     current_date = datetime.now(timezone.utc)
 
-    if leagues_data:
-        nfl_league = leagues_data[0]
-        calendar_data = nfl_league.get('calendar', [])
+    week_counter = 0
+    for period in calendar_data:
+        if 'entries' in period:
+            for week in period['entries']:
+                start_date = datetime.fromisoformat(week['startDate'][:-1]).replace(tzinfo=timezone.utc)
+                end_date = datetime.fromisoformat(week['endDate'][:-1]).replace(tzinfo=timezone.utc)
+                week_label = f"{week['label']}: {start_date.strftime('%m/%d')} - {end_date.strftime('%m/%d')}"
 
-        week_counter = 0
+                week_options.append({'label': week_label, 'value': week_counter})
 
-        for i, period in enumerate(calendar_data):
-            if 'entries' in period:
-                for week in period['entries']:
-                    start_date = datetime.fromisoformat(week['startDate'][:-1]).replace(tzinfo=timezone.utc)
-                    end_date = datetime.fromisoformat(week['endDate'][:-1]).replace(tzinfo=timezone.utc)
-                    week_label = f"{week['label']}: {start_date.strftime('%m/%d')} - {end_date.strftime('%m/%d')}"
+                if start_date <= current_date <= end_date:
+                    selected_value = week_counter
 
-                    week_options.append({'label': week_label, 'value': week_counter})
-
-                    if start_date <= current_date <= end_date:
-                        selected_value = week_counter
-
-                    week_counter += 1  # Increment the counter to ensure each value is unique
+                week_counter += 1
 
     if selected_value is None and week_options:
         selected_value = week_options[0]['value']
 
-    return week_options, True, selected_value
+    return week_options, True, selected_value, data  # Return the fetched data to store it
 
 
 @app.callback(
@@ -243,9 +257,10 @@ def store_selected_week(week_options_fetched):
     Output('in-progress-flag', 'data'),
     [Input('week-selector', 'value'),
      Input('scores-data', 'data')],
+    [State('nfl-events-data', 'data')],  # Use NFL events data from Store
     prevent_initial_call=True
 )
-def display_game_info(selected_week_index, scores_data):
+def display_game_info(selected_week_index, scores_data, nfl_events_data):
     ctx = dash.callback_context
     triggered_by_week_selection = any(
         'week-selector' in trigger['prop_id'] for trigger in ctx.triggered
@@ -254,7 +269,7 @@ def display_game_info(selected_week_index, scores_data):
     if not triggered_by_week_selection and (not scores_data or not any(scores_data)):
         raise dash.exceptions.PreventUpdate  # Prevent update if not triggered by week selection or if scores_data is empty
 
-    data = fetch_nfl_events()
+    data = nfl_events_data  # Use cached data from dcc.Store
     leagues_data = data.get('leagues', [])
 
     if not leagues_data:
@@ -307,13 +322,33 @@ def display_game_info(selected_week_index, scores_data):
         game_id = game.get('id')
         home_color = game_info['Home Team Color']
         away_color = game_info['Away Team Color']
-        # Update scores from scores_data
+
+        # Update scores from scores_data, including possession info
+        possession_team = None
         if scores_data:
             for score_data in scores_data:
                 if score_data.get('game_id') == game_id:
-                    game_info['Home Team Score'] = score_data.get('home_score', 'N/A')
-                    game_info['Away Team Score'] = score_data.get('away_score', 'N/A')
+                    game_info['Home Team Score'] = score_data.get('Home Team Score', 'N/A')
+                    game_info['Away Team Score'] = score_data.get('Away Team Score', 'N/A')
+                    down_distance = score_data.get('Down Distance', '')  # Add down distance
+                    possession_team = score_data.get('Possession', 'N/A')  # Get possession team
                     break
+
+        # Conditionally add the football emoji and down distance for the team with possession
+        home_team_score_display = [html.H4(game_info['Home Team Score'])]
+        away_team_score_display = [html.H4(game_info['Away Team Score'])]
+        home_team_extra_info = []
+        away_team_extra_info = []
+
+        if possession_team == game_info['Home Team']:
+            home_team_score_display.append(" 🏈")  # Football emoji next to home team score
+            home_team_extra_info.append(html.Br())  # Add blank line
+            home_team_extra_info.append(html.H6(down_distance))  # Add down distance info
+
+        elif possession_team == game_info['Away Team']:
+            away_team_score_display.append(" 🏈")  # Football emoji next to away team score
+            away_team_extra_info.append(html.Br())  # Add blank line
+            away_team_extra_info.append(html.H6(down_distance))  # Add down distance info
 
         games_info.append(
             dbc.Button(
@@ -324,8 +359,8 @@ def display_game_info(selected_week_index, scores_data):
                         html.Div([
                             html.H4(game_info['Home Team'], style={'color': game_info['Home Team Color']}),
                             html.P(f"{game_info['Home Team Record']}", style={'margin': '0', 'padding': '0'}),
-                            html.H4(f"{game_info['Home Team Score']}" if game_info[
-                                                                             'Game Status'] != 'Scheduled' else "")
+                            html.Div(home_team_score_display), # Display home team score + 🏈 if possession
+                            html.P(home_team_extra_info)  # Down distance for home team if possession
                         ], style={'text-align': 'center'}),
                         width=3
                     ),
@@ -346,8 +381,8 @@ def display_game_info(selected_week_index, scores_data):
                         html.Div([
                             html.H4(game_info['Away Team'], style={'color': game_info['Away Team Color']}),
                             html.P(f"{game_info['Away Team Record']}", style={'margin': '0', 'padding': '0'}),
-                            html.H4(f"{game_info['Away Team Score']}" if game_info[
-                                                                             'Game Status'] != 'Scheduled' else "")
+                            html.Div(away_team_score_display),  # Display away team score + 🏈 if possession
+                            html.P(away_team_extra_info)  # Down distance for away team if possession
                         ], style={'text-align': 'center'}),
                         width=3
                     ),
@@ -370,84 +405,100 @@ def display_game_info(selected_week_index, scores_data):
         games_info.append(html.Div(id={'type': 'scoring-plays', 'index': game_id}, children=[]))
         games_info.append(html.Hr())
 
-    # print("Games in Progress", games_in_progress)
     return games_info, games_in_progress
 
 
 @app.callback(
     Output('scores-data', 'data'),  # Output to dcc.Store's data property
+    Output('in-progress-flag', 'data', allow_duplicate=True),  # Output for in-progress flag
     [Input('interval-scores', 'n_intervals')],
     [State('scores-data', 'data'),  # Access data from dcc.Store
-     State('week-selector', 'value'),
-     State('in-progress-flag', 'data')],
+     State('nfl-events-data', 'data')],  # Use the events data stored earlier
     prevent_initial_call=True
 )
-def update_scores(n_intervals, prev_scores_data, selected_week_index, games_in_progress):
-    # Check if there are games in progress
-    if not games_in_progress:
-        return dash.no_update
+def update_scores(n_intervals, prev_scores_data, nfl_events_data):
+    # Check if the nfl_events_data contains leagues and events
+    events_data = nfl_events_data.get('events', [])
 
-    # Fetch the updated NFL events data to update scores
-    # print('Updating scores...')
-    data = fetch_nfl_events()
-    leagues_data = data.get('leagues', [])
+    if not events_data:
+        print("No events data found.")
+        return dash.no_update, False
 
-    if not leagues_data or selected_week_index is None:
-        return dash.no_update  # Return no_update if no data or invalid week
-
-    nfl_league = leagues_data[0]
-    calendar_data = nfl_league.get('calendar', [])
-
-    week_data = None
-    week_counter = 0
-
-    # Find the selected week data
-    for period in calendar_data:
-        if 'entries' in period:
-            for week in period['entries']:
-                if week_counter == selected_week_index:
-                    week_data = week
-                    break
-                week_counter += 1
-
-        if week_data:
-            break
-
-    if not week_data:
-        return dash.no_update  # Return no_update if selected week data not found
-
-    week_start = datetime.fromisoformat(week_data['startDate'][:-1]).replace(tzinfo=timezone.utc)
-    week_end = datetime.fromisoformat(week_data['endDate'][:-1]).replace(tzinfo=timezone.utc)
-
-    events_data = data.get('events', [])
-    selected_week_games = [
-        event for event in events_data
-        if week_start <= datetime.fromisoformat(event['date'][:-1]).replace(tzinfo=timezone.utc) <= week_end
+    # Filter games that are in progress
+    game_ids = [
+        event.get('id') for event in events_data
+        if event['status']['type']['description'].lower() == "in progress"
     ]
 
-    # Extract and return only the scores
-    updated_scores_data = []
-    for game in selected_week_games:
-        home_team_score = game['competitions'][0]['competitors'][0].get('score', 'N/A')
-        away_team_score = game['competitions'][0]['competitors'][1].get('score', 'N/A')
-        game_id = game.get('id')
+    # If no games are in progress, we don't need to fetch data
+    if not game_ids:
+        print("No games in progress.")
+        return dash.no_update, False
 
+    print(f"Fetching live data for game IDs: {game_ids}")
+
+    updated_scores_data = []
+    games_in_progress = False
+
+    # Fetch live data for each in-progress game using fetch_game_scoreboard(game_id)
+    for game_id in game_ids:
+        game_data = fetch_game_scoreboard(game_id)
+
+        if not game_data:
+            print(f"Error fetching live scores for game ID {game_id}")
+            continue
+
+        # Extract relevant fields from the game_data
+        game_info = game_data.get('event', {})
+        competitions = game_info.get('competitions', [])
+
+        if not competitions:
+            print(f"No competition data found for game ID {game_id}")
+            continue
+
+        home_team = competitions[0]['competitors'][0]['team']['displayName']
+        away_team = competitions[0]['competitors'][1]['team']['displayName']
+
+        home_score = competitions[0]['competitors'][0].get('score', 'N/A')
+        away_score = competitions[0]['competitors'][1].get('score', 'N/A')
+
+        # Get the quarter and remaining time from the status
+        status_info = game_info.get('status', {})
+        quarter = status_info.get('period', 'N/A')
+        situation = status_info.get('situation', {})
+        time_remaining = status_info.get('displayClock', 'N/A')
+        game_status = status_info.get('type', {}).get('description', 'N/A')
+        possesion = situation.get('downDistanceText', 'N/A')
+        possession_team = situation.get('possession', {}).get('displayName', 'N/A')
+
+        # If game is in progress, mark as true
+        if game_status.lower() == "in progress":
+            games_in_progress = True
+
+        # Append the extracted data to the updated scores data
         updated_scores_data.append({
             'game_id': game_id,
-            'home_score': home_team_score,
-            'away_score': away_team_score
+            'Home Team Score': home_score,
+            'Away Team Score': away_score,
+            'Quarter': quarter,
+            'Time Remaining': time_remaining,
+            'Down Distance': possesion,
+            'Possession': possession_team,
         })
+        print(f"{home_team} vs {away_team}: {quarter} quarter, {time_remaining}")
 
-    if prev_scores_data == updated_scores_data:  # Compare with previous scores
-        return dash.no_update
+    # Compare the new scores with the previous ones to avoid unnecessary updates
+    if prev_scores_data == updated_scores_data:
+        print("No score changes, not updating.")
+        return dash.no_update, games_in_progress
 
-    return updated_scores_data
+    return updated_scores_data, games_in_progress
 
 
 def get_scoring_plays(game_id):
     # print(f"Fetching scoring plays for game ID: {game_id}")
     querystring = {"id": game_id}
-    response = requests.get(SCORING_URL, headers=HEADERS, params=querystring)
+    response = requests.get(SCORINGPLAYS_URL, headers=HEADERS, params=querystring)
 
     if response.status_code == 200:
         scoring_data = response.json()
@@ -495,14 +546,16 @@ def display_scoring_plays(n_clicks_list, button_ids):
     triggered_button = ctx.triggered[0]['prop_id'].split('.')[0]
     game_id = json.loads(triggered_button)['index']  # Get the game ID from button ID
 
-    # Find the corresponding game ID and check if it was clicked (odd number of clicks)
+    # Fetch and display scoring plays for the selected game
+    scoring_plays = get_scoring_plays(game_id)
+
+    # Ensure the scoring plays are displayed for the correct game button
     outputs = []
-    for i, game_id_button in enumerate(button_ids):
+    for i, button_id in enumerate(button_ids):
         if n_clicks_list[i] % 2 == 1:  # Show scoring plays if clicked
-            scoring_plays = get_scoring_plays(game_id_button['index'])
-            outputs.append(scoring_plays)  # Display scoring plays
+            outputs.append(scoring_plays)
         else:
-            outputs.append([])  # Hide scoring plays
+            outputs.append([])  # Hide scoring plays if not clicked
 
     return outputs
 
@@ -518,6 +571,7 @@ app.layout = dbc.Container([
     dcc.Store(id='selected-week', data={'value': None}),  # Store selected week in dcc.Store
     dcc.Store(id='week-options-store', data=False),  # Add dcc.Store for week options
     dcc.Store(id='scores-data', data=[]) , # Use dcc.Store
+    dcc.Store(id='nfl-events-data', data={}),  # New Store for NFL events data
     dbc.Row(dbc.Col(dcc.Dropdown(id='week-selector', options=[], placeholder="Select a week"))),
     dbc.Row(
         dbc.Col(
