@@ -14,7 +14,7 @@ import pytz
 load_dotenv()
 
 # Dash setup
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP], title="NFL Games")
 server = app.server  # Needed if deploying on platforms like Heroku
 
 # Cache config for Flask Caching
@@ -27,7 +27,7 @@ port = int(os.environ.get('PORT', 8080))
 API_KEY = os.getenv("API_KEY")
 NFL_EVENTS_URL = "https://nfl-api-data.p.rapidapi.com/nfl-events"
 ODDS_URL = "https://nfl-api-data.p.rapidapi.com/nfl-eventodds"
-SCORINGPLAYS_URL = "https://nfl-api-data.p.rapidapi.com/nfl-scoringplays"
+SCORING_PLAYS_URL = "https://nfl-api-data.p.rapidapi.com/nfl-scoringplays"
 SCOREBOARD_URL = "https://nfl-api-data.p.rapidapi.com/nfl-single-events"
 HEADERS = {
     "x-rapidapi-key": API_KEY,
@@ -498,7 +498,7 @@ def update_scores(n_intervals, prev_scores_data, nfl_events_data):
 def get_scoring_plays(game_id):
     # print(f"Fetching scoring plays for game ID: {game_id}")
     querystring = {"id": game_id}
-    response = requests.get(SCORINGPLAYS_URL, headers=HEADERS, params=querystring)
+    response = requests.get(SCORING_PLAYS_URL, headers=HEADERS, params=querystring)
 
     if response.status_code == 200:
         scoring_data = response.json()
