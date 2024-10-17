@@ -4,8 +4,10 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="201b6f89-e04e-4cfe-9f18-6b6b0c30beb0" name="Changes" comment="Fixed callbacks">
+    <list default="true" id="201b6f89-e04e-4cfe-9f18-6b6b0c30beb0" name="Changes" comment="v2 - streamlined APIs">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/favicon.ico" beforeDir="false" afterPath="$PROJECT_DIR$/assets/favicon.ico" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/styles.css" beforeDir="false" afterPath="$PROJECT_DIR$/assets/styles.css" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/dash_app.py" beforeDir="false" afterPath="$PROJECT_DIR$/dash_app.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/last_fetched_odds.json" beforeDir="false" afterPath="$PROJECT_DIR$/last_fetched_odds.json" afterDir="false" />
     </list>
@@ -63,6 +65,11 @@
     &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
 }</component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/assets" />
+    </key>
+  </component>
   <component name="RunManager">
     <configuration name="NFL" type="PythonConfigurationType" factoryName="Python">
       <module name="NFL" />
@@ -122,7 +129,10 @@
       <workItem from="1728923908886" duration="837000" />
       <workItem from="1728927589164" duration="3552000" />
       <workItem from="1729103916688" duration="96000" />
-      <workItem from="1729104611288" duration="7697000" />
+      <workItem from="1729104611288" duration="8803000" />
+      <workItem from="1729115136609" duration="2000" />
+      <workItem from="1729190815977" duration="2709000" />
+      <workItem from="1729197578192" duration="3666000" />
     </task>
     <task id="LOCAL-00001" summary="Fixed callbacks">
       <option name="closed" value="true" />
@@ -148,7 +158,15 @@
       <option name="project" value="LOCAL" />
       <updated>1728924733800</updated>
     </task>
-    <option name="localTasksCounter" value="4" />
+    <task id="LOCAL-00004" summary="v2 - streamlined APIs">
+      <option name="closed" value="true" />
+      <created>1729112808036</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1729112808036</updated>
+    </task>
+    <option name="localTasksCounter" value="5" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -156,10 +174,11 @@
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="Fixed callbacks" />
-    <option name="LAST_COMMIT_MESSAGE" value="Fixed callbacks" />
+    <MESSAGE value="v2 - streamlined APIs" />
+    <option name="LAST_COMMIT_MESSAGE" value="v2 - streamlined APIs" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/NFL$dash_app.coverage" NAME="dash_app Coverage Results" MODIFIED="1728500824730" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/NFL$NFL.coverage" NAME="NFL Coverage Results" MODIFIED="1729111682863" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
+    <SUITE FILE_PATH="coverage/NFL$NFL.coverage" NAME="NFL Coverage Results" MODIFIED="1729200409637" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
   </component>
 </project>

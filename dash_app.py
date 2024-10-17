@@ -394,8 +394,8 @@ def display_game_info(selected_week_index, scores_data, nfl_events_data):
                 color='light',
                 className='dash-bootstrap',
                 style={
-                    '--team-home-color': home_color,  # Pass team home color
-                    '--team-away-color': away_color,  # Pass team away color
+                    '--team-home-color': home_color + '50',  # Pass team home color
+                    '--team-away-color': away_color + '50',  # Pass team away color
                     'width': '100%',
                     'text-align': 'left'
                 },
@@ -432,7 +432,7 @@ def update_scores(n_intervals, prev_scores_data, nfl_events_data):
 
     # If no games are in progress, we don't need to fetch data
     if not game_ids:
-        print("No games in progress.")
+        # print("No games in progress.")
         return dash.no_update, False
 
     print(f"Fetching live data for game IDs: {game_ids}")
@@ -560,19 +560,49 @@ def display_scoring_plays(n_clicks_list, button_ids):
     return outputs
 
 
-
 last_fetched_odds = load_last_fetched_odds()
 # Dash layout setup
 app.layout = dbc.Container([
     INTERVAL_SCORES,  # Add scores interval
     INTERVAL_ODDS,    # Add odds interval
-    dbc.Row(dbc.Col(html.H1("NFL Games"), className="text-center")),
     dcc.Store(id='in-progress-flag', data=False),  # Store to track if games are in progress
     dcc.Store(id='selected-week', data={'value': None}),  # Store selected week in dcc.Store
     dcc.Store(id='week-options-store', data=False),  # Add dcc.Store for week options
     dcc.Store(id='scores-data', data=[]) , # Use dcc.Store
     dcc.Store(id='nfl-events-data', data={}),  # New Store for NFL events data
-    dbc.Row(dbc.Col(dcc.Dropdown(id='week-selector', options=[], placeholder="Select a week"))),
+# Adding the title with the logo
+    # Image and title together in the same column
+    dbc.Row(
+        dbc.Col(
+            html.Div(
+                [
+                    html.Img(src="assets/nfl-3644686_1280.webp", height="50px", style={"margin-right": "10px"}),
+                    # Image with a small margin
+                    html.H1("NFL Games", style={"display": "inline-block", "vertical-align": "middle"}),
+                    # Title next to the image
+                ],
+                style={"display": "flex", "align-items": "center", "justify-content": "center"}
+                # Flexbox to align image and text
+            ),
+            width=12,
+            className="text-center"  # Center the content within the column
+        ),
+        style={'margin-bottom': '20px'}
+    ),
+    dbc.Row(dbc.Col(dcc.Dropdown(
+        id='week-selector',
+        options=[],
+        placeholder="Select a week",
+        style={
+            'padding': '3px',
+            'text-align': 'center',  # Center the text horizontally
+            'text-align-last': 'center',  # Center the selected option horizontally
+            'font-size': '20px',  # Enlarge the font
+            'color': 'black',  # Change the font color
+            'align-items': 'center',  # Center the text vertically
+            'justify-content': 'center'  # Center the text horizontally
+        },
+    ))),
     dbc.Row(
         dbc.Col(
             dcc.Loading(  # Add loading spinner here

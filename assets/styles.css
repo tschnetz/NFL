@@ -1,60 +1,87 @@
-/* General body styling */
+/* Body styles for the football field background */
 body {
+  background: repeating-linear-gradient(
+    90deg,  /* Horizontal stripes */
+    #4CAF50,  /* Dark green color for the grass */
+    #4CAF50 150px,  /* Width of the dark green stripe (wider field stripe) */
+    white 150px,  /* Start the white stripe after 150px */
+    white 160px  /* Make the white stripe (yard line) thin, only 10px */
+  );
+  background-size: cover;
+  background-repeat: no-repeat;
   font-family: 'Verdana', sans-serif;
+  color: black;  /* Ensures that text is visible on green background */
+  margin: 0;
+  padding: 0;
+  height: 100%;
 }
 
-/* Game row styling */
+/* Styling for the main container */
+.container {
+  background-color: rgba(255, 255, 255, 0.85);  /* Semi-transparent white background */
+  padding: 20px;
+  border-radius: 15px;
+  box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.2);  /* Adds a shadow for depth */
+  max-width: 1200px;
+  margin: 0 auto;  /* Centers the content */
+  margin-top: 20px;  /* Adds some spacing from the top */
+  margin-bottom: 20px;  /* Adds spacing from the bottom */
+}
+
+/* Styling for individual game rows */
 .game-row {
-  border-bottom: 1px solid #ddd; /* Add a subtle separator */
-  padding: 15px 0; /* Increase spacing */
-  transition: background-color 0.2s; /* Smooth transition for hover effect */
+  border-bottom: 1px solid #ddd;
+  padding: 15px 0;
+  transition: background-color 0.2s;
 }
 
-/* Hover effect on the game row */
+/* Hover effect for game rows */
 .game-row:hover {
-  background-color: cornflowerblue; /* Light blue background on hover */
+  background-color: rgba(255, 255, 255, 0.2);  /* Subtle hover effect */
 }
 
-/* Styling for odd game rows */
-.game-row:nth-child(odd) {
-  background-color: #f9f9f9; /* Slightly different background for odd rows */
-}
-
-/* Styling for images in game row */
-.game-row img {
-  border: 0px solid #ddd; /* Add a border to logos */
-  border-radius: 5px; /* Slightly rounded corners for logos */
-}
-
-/* Scoring plays section */
-.scoring-plays {
-  background-color: #f0f0f0; /* Light background for scoring plays */
-  padding: 10px;
-  border-radius: 5px;
-  margin-top: 5px;
-}
-
-/* Font style for scoring plays */
-.scoring-plays .row {
-  font-family: monospace; /* Use monospace font for play text */
-}
-
-/* Button styling inside the game-row */
-/* More specific button styling for dash-bootstrap-components */
+/* Button styling */
 button.dash-bootstrap {
-  background-color: #f0f0f0 !important; /* Default button background color */
-  border: none !important; /* Remove default border */
-  color: black !important; /* Text color */
-  padding: 15px 20px !important; /* Padding inside the button */
-  text-align: left !important; /* Align text to the left */
-  width: 100% !important; /* Ensure the button takes up the full width */
-  cursor: pointer !important; /* Change the cursor to pointer on hover */
-  transition: background-color 0.3s ease !important; /* Smooth transition for background color on hover */
-  display: block !important; /* Make the button block level */
+  background-color: rgba(255, 255, 255, 0.7) !important;
+  border: none !important;
+  color: black !important;
+  padding: 15px 20px !important;
+  text-align: left !important;
+  width: 100% !important;
+  cursor: pointer !important;
+  transition: background-color 0.3s ease !important;
+  display: block !important;
 }
 
-/* Hover state for the buttons */
+/* Hover effect for buttons */
 button.dash-bootstrap:hover {
   background: linear-gradient(90deg, var(--team-home-color), var(--team-away-color)) !important;
-  color: black !important; /* Keep text white */
+  color: white !important;
+}
+
+/* Footer styling for last updated time */
+footer {
+  text-align: center;
+  font-size: 12px;
+  color: #888;
+  margin-top: 20px;
+}
+
+/* Ensuring any headers are styled properly */
+h1  {
+  color: black;  /* White color to stand out on green background */
+  margin: 0 0 10px;
+}
+
+
+/* Ensure container is responsive */
+@media (max-width: 768px) {
+  .container {
+    padding: 10px;
+    max-width: 90%;
+  }
+
+  .game-row {
+    padding: 10px 0;
+  }
 }
