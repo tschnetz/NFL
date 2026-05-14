@@ -88,7 +88,7 @@ struct GamesView: View {
             }
             .navigationTitle("Games")
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) { seasonMenu }
+                ToolbarItem(placement: .primaryAction) { seasonMenu }
             }
             .task {
                 await model.reload()

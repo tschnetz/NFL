@@ -377,7 +377,7 @@ struct PicksView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
+        ToolbarItem(placement: .primaryAction) {
             Menu {
                 Section("Season") {
                     ForEach(model.availableSeasons, id: \.self) { s in
@@ -771,7 +771,7 @@ private struct OpenWeekSheet: View {
                 }
             }
             .navigationTitle("Open Week")
-            .navigationBarTitleDisplayMode(.inline)
+            .navBarInline()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -798,7 +798,7 @@ private struct PickGameSheet: View {
         NavigationStack {
             content
                 .navigationTitle("\(picker): pick a game")
-                .navigationBarTitleDisplayMode(.inline)
+                .navBarInline()
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Done") { onClose() }
@@ -915,7 +915,7 @@ private struct MarkDoublesSheet: View {
         NavigationStack {
             picksList
                 .navigationTitle("\(picker): doubles (max 2)")
-                .navigationBarTitleDisplayMode(.inline)
+                .navBarInline()
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Cancel") { onClose() }
@@ -1012,7 +1012,7 @@ private struct MarkPressesSheet: View {
         NavigationStack {
             picksList
                 .navigationTitle("\(picker): press \(target) (max 2)")
-                .navigationBarTitleDisplayMode(.inline)
+                .navBarInline()
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Cancel") { onClose() }

@@ -19,7 +19,7 @@ struct TeamsView: View {
             content
                 .navigationTitle("Teams")
                 .toolbar { toolbarContent }
-                .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always))
+                .searchable(text: $search)
                 .navigationDestination(for: String.self) { abbr in
                     TeamDetailView(abbr: abbr)
                 }
@@ -29,7 +29,7 @@ struct TeamsView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
+        ToolbarItem(placement: .primaryAction) {
             Menu {
                 Picker("Conference", selection: $conferenceFilter) {
                     ForEach(ConferenceTag.allCases) { Text($0.rawValue).tag($0) }
@@ -67,7 +67,7 @@ struct TeamsView: View {
                     }
                 }
             }
-            .listStyle(.insetGrouped)
+            .listStyle(.inset)
         }
     }
 

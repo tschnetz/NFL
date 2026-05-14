@@ -84,7 +84,7 @@ struct ResultsView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
+        ToolbarItem(placement: .primaryAction) {
             Menu {
                 Section("Season") {
                     ForEach(selection.availableSeasons, id: \.self) { s in
@@ -174,7 +174,7 @@ struct ResultsView: View {
                 }
             }
         }
-        .listStyle(.insetGrouped)
+        .listStyle(.inset)
     }
 
     private func navRow(_ game: ScheduleGame) -> some View {

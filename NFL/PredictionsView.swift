@@ -45,7 +45,7 @@ struct PredictionsView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
+        ToolbarItem(placement: .primaryAction) {
             Menu {
                 Section("Season") {
                     ForEach(selection.availableSeasons, id: \.self) { s in

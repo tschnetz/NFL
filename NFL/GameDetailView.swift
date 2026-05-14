@@ -18,9 +18,9 @@ struct GameDetailView: View {
         }
         .navigationTitle("\(game.awayTeam) @ \(game.homeTeam)")
         .navigationSubtitle("Week \(game.week) · \(String(game.season))")
-        .navigationBarTitleDisplayMode(.inline)
+        .navBarInline()
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .primaryAction) {
                 ShareLink(item: shareSummary) {
                     Image(systemName: "square.and.arrow.up")
                 }

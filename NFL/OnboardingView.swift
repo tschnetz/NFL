@@ -47,7 +47,7 @@ struct OnboardingView: View {
                 .padding(20)
             }
             .navigationTitle("Welcome")
-            .navigationBarTitleDisplayMode(.inline)
+            .navBarInline()
         }
     }
 

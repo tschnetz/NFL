@@ -31,7 +31,7 @@ struct SettingsView: View {
 
                 Section {
                     SecureField("Bearer token", text: $bindable.apiKey)
-                        .textInputAutocapitalization(.never)
+                        .iOSNoAutocapitalization()
                         .autocorrectionDisabled()
                 } header: {
                     Text("Authentication")

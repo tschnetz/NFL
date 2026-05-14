@@ -102,9 +102,9 @@ struct TeamDetailView: View {
         }
         .navigationTitle(team?.displayName ?? abbr)
         .navigationSubtitle(divisionLabel)
-        .navigationBarTitleDisplayMode(.inline)
+        .navBarInline()
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .primaryAction) {
                 Button {
                     settings.toggleFavorite(abbr)
                 } label: {
