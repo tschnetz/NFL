@@ -153,32 +153,32 @@ final class PicksViewModel {
             actionError = "Couldn't resolve team id for \(abbr)"
             return
         }
-        nonisolated struct Body: Encodable {
-            let season: Int
-            let week: Int
-            let seasonType: String
-            let userId: String
-            let gameId: Int
-            let teamId: Int
-            let teamName: String
+        guard let pickerEnum = Player(rawValue: picker) else {
+            actionError = "Unknown picker \(picker)"
+            return
         }
-        let body = Body(season: season, week: week, seasonType: "regular",
-                        userId: picker, gameId: game.espnId, teamId: teamId,
-                        teamName: team.displayName)
-        await runMutation { try await self.client.post("/api/picks/pick", body: body) }
+        let action = PendingPickAction(
+            kind: .makePick,
+            season: season, week: week, seasonType: "regular",
+            picker: pickerEnum,
+            gameId: game.espnId,
+            teamId: teamId,
+            teamName: team.displayName
+        )
+        await runQueuedMutation(action)
     }
 
     func unpick(gameId: Int, picker: String) async {
-        nonisolated struct Body: Encodable {
-            let season: Int
-            let week: Int
-            let seasonType: String
-            let userId: String
-            let gameId: Int
+        guard let pickerEnum = Player(rawValue: picker) else {
+            actionError = "Unknown picker \(picker)"
+            return
         }
-        let body = Body(season: season, week: week, seasonType: "regular",
-                        userId: picker, gameId: gameId)
-        await runMutation { try await self.client.post("/api/picks/unpick", body: body) }
+        let action = PendingPickAction(
+            kind: .unpick,
+            season: season, week: week, seasonType: "regular",
+            picker: pickerEnum, gameId: gameId
+        )
+        await runQueuedMutation(action)
     }
 
     func advanceTurn() async {
@@ -286,10 +286,39 @@ final class PicksViewModel {
             actionError = error.localizedDescription
         }
     }
+
+    /// Executes a player-driven action with offline-queue fallback.
+    /// Transient errors (network, 5xx) get silently queued and replayed
+    /// later; permanent errors (4xx, decode) surface as an action error.
+    private func runQueuedMutation(_ action: PendingPickAction) async {
+        isMutating = true
+        defer { isMutating = false }
+        actionError = nil
+        do {
+            let env = try await action.execute(client: client)
+            state = .loaded(env.data)
+        } catch {
+            if OfflinePicksQueue.shouldQueue(error) {
+                OfflinePicksQueue.shared.enqueue(action)
+            } else {
+                actionError = error.localizedDescription
+            }
+        }
+    }
+
+    /// Drain any pending offline actions. Caller (PicksView's polling
+    /// task + pull-to-refresh + onAppear) invokes this opportunistically.
+    func flushOfflineQueue() async {
+        let latest = await OfflinePicksQueue.shared.flush(client: client)
+        if let latest {
+            state = .loaded(latest)
+        }
+    }
 }
 
 struct PicksView: View {
     @State private var model = PicksViewModel()
+    @State private var offlineQueue = OfflinePicksQueue.shared
     @State private var showOpenSheet = false
     @State private var pickTarget: PickTarget?
     @State private var doublesTarget: DoublesTarget?
@@ -318,12 +347,17 @@ struct PicksView: View {
                 .toolbar { toolbarContent }
                 .task {
                     await model.load()
+                    await model.flushOfflineQueue()
                     while !Task.isCancelled {
                         do { try await Task.sleep(for: .seconds(10)) } catch { return }
                         await model.reloadState()
+                        await model.flushOfflineQueue()
                     }
                 }
-                .refreshable { await model.reloadState() }
+                .refreshable {
+                    await model.reloadState()
+                    await model.flushOfflineQueue()
+                }
                 .sheet(isPresented: $showOpenSheet) {
                     OpenWeekSheet(season: model.season, week: model.week) { total, first in
                         Task {
@@ -372,11 +406,39 @@ struct PicksView: View {
                 } message: {
                     Text(model.actionError ?? "")
                 }
+                .alert("Pick couldn’t be saved",
+                       isPresented: Binding(
+                        get: { offlineQueue.lastDropError != nil },
+                        set: { if !$0 { offlineQueue.dismissLastDropError() } }
+                       )) {
+                    Button("OK", role: .cancel) {
+                        offlineQueue.dismissLastDropError()
+                    }
+                } message: {
+                    if let event = offlineQueue.lastDropError {
+                        Text("\(event.summary)\n\(event.reason)")
+                    }
+                }
         }
     }
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        if offlineQueue.count > 0 {
+            ToolbarItem(placement: .primaryAction) {
+                HStack(spacing: 4) {
+                    Image(systemName: offlineQueue.isFlushing
+                          ? "arrow.triangle.2.circlepath"
+                          : "icloud.slash")
+                        .symbolEffect(.pulse, isActive: offlineQueue.isFlushing)
+                    Text("\(offlineQueue.count)")
+                        .monospacedDigit()
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.orange)
+                .accessibilityLabel("\(offlineQueue.count) pending picks")
+            }
+        }
         ToolbarItem(placement: .primaryAction) {
             Menu {
                 Section("Season") {
