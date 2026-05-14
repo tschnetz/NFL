@@ -42,4 +42,17 @@ final class WeekSelection {
         // the one that ended this past Feb.
         return month < 9 ? year - 1 : year
     }
+
+    /// The current / upcoming NFL season. In May 2026 returns 2026 (the
+    /// season that kicks off Sept 2026). Used by the forward-looking
+    /// Schedule + Scoreboard tabs which don't browse past seasons.
+    nonisolated static var currentSeason: Int {
+        let cal = Calendar(identifier: .gregorian)
+        let now = Date()
+        let year = cal.component(.year, from: now)
+        let month = cal.component(.month, from: now)
+        // Jan / Feb: postseason of the prior labeled season; otherwise
+        // the calendar year is the season label.
+        return month < 3 ? year - 1 : year
+    }
 }
