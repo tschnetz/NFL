@@ -870,7 +870,8 @@ private struct PickGameSheet: View {
     }
 
     private func sideButton(abbr: String, label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        let teamColor = TeamRepository.shared.team(abbr: abbr)?.primarySwiftUIColor
+        return Button(action: action) {
             VStack(spacing: 8) {
                 Text(label)
                     .font(.caption2.weight(.semibold))
@@ -882,7 +883,14 @@ private struct PickGameSheet: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 20)
-            .background(.background.secondary, in: .rect(cornerRadius: 14))
+            .background(
+                (teamColor ?? .secondary).opacity(0.16),
+                in: .rect(cornerRadius: 14)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder((teamColor ?? .clear).opacity(0.4), lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
         .disabled(model.isMutating)

@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct TeamLogoView: View {
     let abbr: String
@@ -8,7 +11,9 @@ struct TeamLogoView: View {
 
     var body: some View {
         Group {
-            if let url = logoURL {
+            if hasBundledLogo {
+                Image("Logos/\(abbr)").resizable().scaledToFit()
+            } else if let url = logoURL {
                 AsyncImage(url: url, transaction: Transaction(animation: .default)) { phase in
                     switch phase {
                     case .success(let image):
@@ -25,6 +30,14 @@ struct TeamLogoView: View {
         }
         .frame(width: size, height: size)
         .task { await repo.ensureLoaded() }
+    }
+
+    private var hasBundledLogo: Bool {
+        #if canImport(UIKit)
+        return UIImage(named: "Logos/\(abbr)") != nil
+        #else
+        return false
+        #endif
     }
 
     private var logoURL: URL? {
