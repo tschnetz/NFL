@@ -317,19 +317,22 @@ final class PicksViewModel {
 }
 
 struct PicksView: View {
+    @Environment(AppSettings.self) private var settings
     @State private var model = PicksViewModel()
     @State private var offlineQueue = OfflinePicksQueue.shared
     @State private var showOpenSheet = false
-    @State private var pickTarget: PickTarget?
     @State private var doublesTarget: DoublesTarget?
     @State private var pressesTarget: PressesTarget?
     @State private var showCloseConfirm = false
     @State private var showScoreConfirm = false
 
-    private struct PickTarget: Identifiable {
-        let picker: String
-        var id: String { picker }
+    /// Pigskin convention: Tom is the slate admin (open / close / score /
+    /// advance turn). Everyone can still see admin status; only Tom gets
+    /// the buttons. Change later if Jim wants admin too.
+    private var isAdmin: Bool {
+        Player(rawValue: settings.activePicker ?? "") == .tom
     }
+
     private struct DoublesTarget: Identifiable {
         let picker: String
         var id: String { picker }
@@ -364,11 +367,6 @@ struct PicksView: View {
                             await model.openWeek(totalGames: total, firstTurn: first)
                             showOpenSheet = false
                         }
-                    }
-                }
-                .sheet(item: $pickTarget) { target in
-                    PickGameSheet(picker: target.picker, model: model) {
-                        pickTarget = nil
                     }
                 }
                 .sheet(item: $doublesTarget) { target in
@@ -489,12 +487,21 @@ struct PicksView: View {
                     summaryCard(state)
 
                     if state.totalGames == 0 && state.status == .picking {
-                        openCTA
+                        if isAdmin {
+                            openCTA
+                        } else {
+                            waitingPlaceholder
+                        }
                     } else if state.status == .picking {
-                        actionRow(state)
+                        pickCardsSection(state)
+                        if isAdmin {
+                            actionRow(state)
+                        }
                     }
 
-                    adminActions(state)
+                    if isAdmin {
+                        adminActions(state)
+                    }
                     pickerColumns(state)
                 }
                 .padding(16)
@@ -551,35 +558,136 @@ struct PicksView: View {
         .disabled(model.isMutating)
     }
 
+    /// Admin-only row: advance the turn manually if the picker order
+    /// drifts. The primary "pick a game" affordance is the inline card
+    /// section above; everyone can use that when it's their turn.
     private func actionRow(_ state: PicksState) -> some View {
-        HStack(spacing: 10) {
-            if let turn = state.currentTurn {
-                Button {
-                    pickTarget = PickTarget(picker: turn)
-                } label: {
-                    HStack {
-                        Image(systemName: "hand.tap")
-                        Text("\(turn): pick a game")
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(.tint, in: .capsule)
-                    .foregroundStyle(.white)
-                }
-                .buttonStyle(.plain)
-                .disabled(model.isMutating || model.unpickedGames.isEmpty)
-            }
+        HStack {
             Button {
                 Task { await model.advanceTurn() }
             } label: {
-                Image(systemName: "arrow.uturn.right")
-                    .padding(10)
-                    .background(.background.secondary, in: .circle)
+                Label("Advance turn", systemImage: "arrow.uturn.right")
+                    .font(.subheadline.weight(.medium))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.bordered)
+            .controlSize(.small)
             .disabled(model.isMutating)
             .accessibilityLabel("Advance turn")
+            Spacer()
+            if let turn = state.currentTurn {
+                Text("On the clock: \(turn)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
+    }
+
+    /// Non-admin placeholder when no week has been opened yet.
+    private var waitingPlaceholder: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "hourglass")
+                .foregroundStyle(.secondary)
+            Text("Tom hasn't opened this week yet.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.background.secondary, in: .rect(cornerRadius: 12))
+    }
+
+    /// Inline per-game cards — replaces the older "Pick a game" sheet.
+    /// Anyone whose turn it is can tap a team button directly here.
+    @ViewBuilder
+    private func pickCardsSection(_ state: PicksState) -> some View {
+        let unpicked = model.unpickedGames
+        if unpicked.isEmpty {
+            EmptyView()
+        } else {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("This week’s slate")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .textCase(.uppercase)
+                    Spacer()
+                    Text("\(unpicked.count) left")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .monospacedDigit()
+                }
+                VStack(spacing: 10) {
+                    ForEach(unpicked) { game in
+                        pickCard(game: game, currentTurn: state.currentTurn)
+                    }
+                }
+            }
+        }
+    }
+
+    private func pickCard(game: ScheduleGame, currentTurn: String?) -> some View {
+        let awayColor = TeamRepository.shared.team(abbr: game.awayTeam)?.primarySwiftUIColor
+        let homeColor = TeamRepository.shared.team(abbr: game.homeTeam)?.primarySwiftUIColor
+        let canPick = currentTurn != nil
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Text(game.kickoff, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute())
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if let turn = currentTurn {
+                    Text("\(turn) picks")
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.accentColor.opacity(0.18), in: Capsule())
+                        .foregroundStyle(Color.accentColor)
+                }
+            }
+            HStack(spacing: 10) {
+                teamPickButton(abbr: game.awayTeam, label: "AWAY", tint: awayColor) {
+                    Task {
+                        await model.makePick(game: game, picker: currentTurn ?? "", side: .away)
+                    }
+                }
+                .disabled(!canPick || model.isMutating)
+                teamPickButton(abbr: game.homeTeam, label: "HOME", tint: homeColor) {
+                    Task {
+                        await model.makePick(game: game, picker: currentTurn ?? "", side: .home)
+                    }
+                }
+                .disabled(!canPick || model.isMutating)
+            }
+        }
+        .padding(12)
+        .background(.background.secondary, in: .rect(cornerRadius: 12))
+    }
+
+    private func teamPickButton(
+        abbr: String,
+        label: String,
+        tint: Color?,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Text(label)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .textCase(.uppercase)
+                TeamLogoView(abbr: abbr, size: 44, style: .helmet)
+                Text(abbr).font(.headline)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background((tint ?? .secondary).opacity(0.12), in: .rect(cornerRadius: 10))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder((tint ?? .clear).opacity(0.35), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -844,122 +952,6 @@ private struct OpenWeekSheet: View {
                 }
             }
         }
-    }
-}
-
-// MARK: - Pick Game sheet
-
-private struct PickGameSheet: View {
-    let picker: String
-    let model: PicksViewModel
-    let onClose: () -> Void
-
-    @State private var selectedGame: ScheduleGame?
-
-    var body: some View {
-        NavigationStack {
-            content
-                .navigationTitle("\(picker): pick a game")
-                .navBarInline()
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Done") { onClose() }
-                    }
-                }
-        }
-    }
-
-    @ViewBuilder
-    private var content: some View {
-        let unpicked = model.unpickedGames
-        if unpicked.isEmpty {
-            ContentUnavailableView("All games picked",
-                                   systemImage: "checkmark.circle",
-                                   description: Text("No games left for week \(model.week)."))
-        } else if let game = selectedGame {
-            sideChooser(for: game)
-        } else {
-            List(unpicked) { game in
-                Button {
-                    selectedGame = game
-                } label: {
-                    HStack(spacing: 10) {
-                        HStack(spacing: 4) {
-                            TeamLogoView(abbr: game.awayTeam, size: 22)
-                            TeamLogoView(abbr: game.homeTeam, size: 22)
-                        }
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("\(game.awayTeam) @ \(game.homeTeam)")
-                                .font(.subheadline.weight(.semibold))
-                            Text(game.kickoff, format: .dateTime.weekday().month().day().hour().minute())
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                        }
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-                .buttonStyle(.plain)
-            }
-            .listStyle(.plain)
-        }
-    }
-
-    private func sideChooser(for game: ScheduleGame) -> some View {
-        VStack(spacing: 20) {
-            Text("Who covers?")
-                .font(.headline)
-                .foregroundStyle(.secondary)
-            HStack(spacing: 12) {
-                sideButton(abbr: game.awayTeam, label: "Away") {
-                    Task {
-                        await model.makePick(game: game, picker: picker, side: .away)
-                        onClose()
-                    }
-                }
-                sideButton(abbr: game.homeTeam, label: "Home") {
-                    Task {
-                        await model.makePick(game: game, picker: picker, side: .home)
-                        onClose()
-                    }
-                }
-            }
-            Button("Choose a different game") {
-                selectedGame = nil
-            }
-            .font(.subheadline)
-            .padding(.top, 8)
-        }
-        .padding(24)
-    }
-
-    private func sideButton(abbr: String, label: String, action: @escaping () -> Void) -> some View {
-        let teamColor = TeamRepository.shared.team(abbr: abbr)?.primarySwiftUIColor
-        return Button(action: action) {
-            VStack(spacing: 8) {
-                Text(label)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-                    .textCase(.uppercase)
-                TeamLogoView(abbr: abbr, size: 56, style: .helmet)
-                Text(abbr)
-                    .font(.title2.weight(.bold))
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 20)
-            .background(
-                (teamColor ?? .secondary).opacity(0.16),
-                in: .rect(cornerRadius: 14)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder((teamColor ?? .clear).opacity(0.4), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-        .disabled(model.isMutating)
     }
 }
 

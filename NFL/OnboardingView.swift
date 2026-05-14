@@ -1,102 +1,88 @@
 import SwiftUI
 
+/// Focused first-launch picker selection. Replaces an earlier feature-
+/// bullets onboarding — Pigskin's pattern is to put the picker choice
+/// front and center and trust the user to discover features once they
+/// land on the main UI.
 struct OnboardingView: View {
     @Environment(AppSettings.self) private var settings
     @Environment(\.dismiss) private var dismiss
 
-    @State private var pickerChoice: String? = nil
-
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    header
-
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Who are you?")
-                            .font(.headline)
-                        Text("Pick the side that's yours. We'll emphasize your turn and your picks on the Picks tab.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-
-                        HStack(spacing: 12) {
-                            choiceButton("Jim")
-                            choiceButton("Tom")
-                            choiceButton(nil, label: "Skip")
-                        }
-                    }
-                    .padding(16)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.background.secondary, in: .rect(cornerRadius: 14))
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        bulletPoint(systemImage: "sportscourt",
-                                    title: "Games + Results",
-                                    detail: "Browse any week of the schedule, with the model's per-game pick inline.")
-                        bulletPoint(systemImage: "chart.bar.xaxis",
-                                    title: "Predictions",
-                                    detail: "Week-level rollups of best bets, strength distribution, top spreads + totals.")
-                        bulletPoint(systemImage: "list.number",
-                                    title: "Standings + Teams",
-                                    detail: "AFC/NFC divisional view and a per-team browser with schedule, stats, leaders, roster.")
-                        bulletPoint(systemImage: "checkmark.circle",
-                                    title: "Picks",
-                                    detail: "Open a week, pick games, mark doubles, call presses, close, score.")
-                    }
-                }
-                .padding(20)
-            }
-            .navigationTitle("Welcome")
-            .navBarInline()
+        VStack(spacing: 28) {
+            Spacer(minLength: 0)
+            header
+            choices
+            footer
+            Spacer(minLength: 0)
         }
+        .padding(28)
+        .interactiveDismissDisabled()
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("NFL")
+        VStack(spacing: 10) {
+            Image("Logos/NFL")
+                .resizable()
+                .scaledToFit()
+                .frame(height: 72)
+                .accessibilityHidden(true)
+            Text("Who's picking?")
                 .font(.largeTitle.weight(.bold))
-            Text("Picks + predictions, paired with the live nflverse data.")
+                .multilineTextAlignment(.center)
+            Text("On this device.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
     }
 
-    private func choiceButton(_ name: String?, label: String? = nil) -> some View {
-        let displayLabel = label ?? name ?? "Skip"
-        let isSelected = pickerChoice == name && name != nil
-        return Button {
-            pickerChoice = name
-            settings.activePicker = name
+    private var choices: some View {
+        VStack(spacing: 12) {
+            choiceButton(.jim, tint: .blue)
+            choiceButton(.tom, tint: .red)
+            Button("Maybe later") {
+                settings.hasCompletedOnboarding = true
+                dismiss()
+            }
+            .font(.subheadline)
+            .foregroundStyle(.tertiary)
+            .padding(.top, 4)
+        }
+    }
+
+    private func choiceButton(_ player: Player, tint: Color) -> some View {
+        Button {
+            settings.activePicker = player.rawValue
             settings.hasCompletedOnboarding = true
             dismiss()
         } label: {
-            Text(displayLabel)
-                .font(.headline)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(
-                    isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.background.tertiary),
-                    in: .capsule
-                )
-                .foregroundStyle(isSelected ? Color.white : .primary)
+            HStack(spacing: 12) {
+                Image(systemName: "person.fill")
+                    .font(.title2)
+                Text(player.displayName)
+                    .font(.title2.weight(.semibold))
+                Spacer()
+                Image(systemName: "arrow.right")
+                    .font(.headline)
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 18)
+            .background(tint.opacity(0.16), in: .rect(cornerRadius: 16))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(tint.opacity(0.35), lineWidth: 1)
+            )
+            .foregroundStyle(tint)
         }
         .buttonStyle(.plain)
     }
 
-    private func bulletPoint(systemImage: String, title: String, detail: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: systemImage)
-                .font(.title3)
-                .foregroundStyle(.tint)
-                .frame(width: 30)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                Text(detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
+    private var footer: some View {
+        Text("This affects which picker the Picks tab highlights as ‘you’ and which admin controls you see. Change it later in Settings.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
     }
 }
 
