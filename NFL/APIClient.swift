@@ -7,12 +7,14 @@ nonisolated enum Config {
 nonisolated enum APIError: Error, LocalizedError {
     case badResponse
     case status(Int)
+    case server(String)
     case decoding(any Error)
 
     var errorDescription: String? {
         switch self {
         case .badResponse: "Network error"
         case .status(let code): "Server returned \(code)"
+        case .server(let message): message
         case .decoding(let err): "Decoding failed: \(err.localizedDescription)"
         }
     }
@@ -24,11 +26,13 @@ actor APIClient {
     private let session: URLSession
     private let baseURL: URL
     private let decoder: JSONDecoder
+    private let encoder: JSONEncoder
 
     init(session: URLSession = .shared, baseURL: URL = Config.baseURL) {
         self.session = session
         self.baseURL = baseURL
         self.decoder = JSONDecoder.nflBackend
+        self.encoder = JSONEncoder()
     }
 
     func get<T: Decodable & Sendable>(
@@ -47,14 +51,58 @@ actor APIClient {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
         let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw APIError.badResponse }
-        guard (200..<300).contains(http.statusCode) else { throw APIError.status(http.statusCode) }
+        try Self.validate(response: response, data: data)
 
         do {
             return try decoder.decode(T.self, from: data)
         } catch {
             throw APIError.decoding(error)
         }
+    }
+
+    func post<Body: Encodable & Sendable, Response: Decodable & Sendable>(
+        _ path: String,
+        body: Body,
+        as _: Response.Type = Response.self
+    ) async throws -> Response {
+        let url = baseURL.appending(path: path)
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(body)
+
+        let (data, response) = try await session.data(for: request)
+        try Self.validate(response: response, data: data)
+
+        do {
+            return try decoder.decode(Response.self, from: data)
+        } catch {
+            throw APIError.decoding(error)
+        }
+    }
+
+    private static func validate(response: URLResponse, data: Data) throws {
+        guard let http = response as? HTTPURLResponse else { throw APIError.badResponse }
+        guard (200..<300).contains(http.statusCode) else {
+            // FastAPI emits `{"detail": ...}` on 4xx; for picks mutations,
+            // `detail` is `{"ok": false, "error": "<message>"}`.
+            if let parsed = parseErrorMessage(from: data) {
+                throw APIError.server(parsed)
+            }
+            throw APIError.status(http.statusCode)
+        }
+    }
+
+    private static func parseErrorMessage(from data: Data) -> String? {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+        if let detail = object["detail"] as? [String: Any], let err = detail["error"] as? String {
+            return err
+        }
+        if let detail = object["detail"] as? String { return detail }
+        if let err = object["error"] as? String { return err }
+        return nil
     }
 }
 

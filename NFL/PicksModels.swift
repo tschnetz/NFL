@@ -13,6 +13,8 @@ nonisolated struct PicksState: Decodable, Sendable {
     let currentTurn: String?
     let totalGames: Int
     let basePoints: Int
+    let picks: [String: PickEntry]
+    let scores: PicksScores?
     let lockedAt: Date?
     let scoredAt: Date?
     let updatedAt: Date
@@ -36,5 +38,31 @@ nonisolated struct PicksState: Decodable, Sendable {
             case .unknown: "—"
             }
         }
+    }
+}
+
+nonisolated struct PickEntry: Decodable, Sendable {
+    let picker: String?
+    let teamId: Int?
+    let teamName: String?
+    let homeTeamId: Int?
+    let awayTeamId: Int?
+    let double: Bool
+    let press: Bool
+    let pressedBy: String?
+    let spreadSnapshot: Double?
+    let homeScore: Int?
+    let awayScore: Int?
+    let points: Int?
+    let pickedAt: Date?
+}
+
+nonisolated struct PicksScores: Decodable, Sendable {
+    let jim: Int
+    let tom: Int
+
+    enum CodingKeys: String, CodingKey {
+        case jim = "Jim"
+        case tom = "Tom"
     }
 }
