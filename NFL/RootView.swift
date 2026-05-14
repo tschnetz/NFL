@@ -20,6 +20,9 @@ struct RootView: View {
 
             PicksView()
                 .tabItem { Label("Picks", systemImage: "checkmark.circle") }
+
+            SettingsView()
+                .tabItem { Label("Settings", systemImage: "gearshape") }
         }
         .tabViewStyle(.sidebarAdaptable)
     }

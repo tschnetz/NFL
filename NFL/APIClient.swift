@@ -27,12 +27,18 @@ actor APIClient {
     private let baseURL: URL
     private let decoder: JSONDecoder
     private let encoder: JSONEncoder
+    private var authToken: String?
 
     init(session: URLSession = .shared, baseURL: URL = Config.baseURL) {
         self.session = session
         self.baseURL = baseURL
         self.decoder = JSONDecoder.nflBackend
         self.encoder = JSONEncoder()
+    }
+
+    func setAuthToken(_ token: String?) {
+        let trimmed = token?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.authToken = (trimmed?.isEmpty == false) ? trimmed : nil
     }
 
     func get<T: Decodable & Sendable>(
@@ -49,6 +55,9 @@ actor APIClient {
 
         var request = URLRequest(url: url)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let token = authToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
 
         let (data, response) = try await session.data(for: request)
         try Self.validate(response: response, data: data)
@@ -70,6 +79,9 @@ actor APIClient {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let token = authToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
         request.httpBody = try encoder.encode(body)
 
         let (data, response) = try await session.data(for: request)
