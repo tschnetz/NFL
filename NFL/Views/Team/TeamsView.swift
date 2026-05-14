@@ -20,9 +20,6 @@ struct TeamsView: View {
                 .navigationTitle("Teams")
                 .toolbar { toolbarContent }
                 .searchable(text: $search)
-                .navigationDestination(for: String.self) { abbr in
-                    TeamDetailView(abbr: abbr)
-                }
                 .task { await repo.ensureLoaded() }
         }
     }
@@ -49,7 +46,9 @@ struct TeamsView: View {
                 ForEach(groupedTeams(), id: \.division) { group in
                     Section(group.division) {
                         ForEach(group.teams) { team in
-                            NavigationLink(value: team.abbreviation) {
+                            NavigationLink {
+                                TeamDetailView(abbr: team.abbreviation)
+                            } label: {
                                 row(team)
                             }
                             .swipeActions(edge: .trailing) {
