@@ -3,8 +3,8 @@ import SwiftUI
 @MainActor
 @Observable
 final class PicksViewModel {
-    var season: Int = 2024
-    var week: Int = 6
+    var season: Int = 2025
+    var week: Int = 1
     var state: LoadState<PicksState> = .idle
 
     private let client: APIClient

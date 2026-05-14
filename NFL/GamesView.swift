@@ -170,9 +170,14 @@ struct GamesView: View {
                                        description: Text("Try a different week."))
             } else {
                 List(games) { game in
-                    GameRowView(game: game, prediction: model.prediction(for: game))
-                        .listRowInsets(.init(top: 6, leading: 16, bottom: 6, trailing: 16))
-                        .listRowSeparator(.hidden)
+                    NavigationLink {
+                        GameDetailView(game: game, prediction: model.prediction(for: game))
+                    } label: {
+                        GameRowView(game: game, prediction: model.prediction(for: game))
+                    }
+                    .buttonStyle(.plain)
+                    .listRowInsets(.init(top: 6, leading: 16, bottom: 6, trailing: 16))
+                    .listRowSeparator(.hidden)
                 }
                 .listStyle(.plain)
             }
