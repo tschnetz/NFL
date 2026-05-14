@@ -9,9 +9,14 @@ import SwiftUI
 
 @main
 struct NFLApp: App {
+    @State private var weekSelection = WeekSelection()
+    @State private var settings = AppSettings.shared
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(weekSelection)
+                .environment(settings)
         }
     }
 }
