@@ -3,17 +3,30 @@ import SwiftUI
 import UIKit
 #endif
 
+enum TeamLogoStyle {
+    case logo
+    case helmet
+
+    var assetNamespace: String {
+        switch self {
+        case .logo: "Logos"
+        case .helmet: "Helmets"
+        }
+    }
+}
+
 struct TeamLogoView: View {
     let abbr: String
     var size: CGFloat = 28
+    var style: TeamLogoStyle = .logo
 
     private let repo = TeamRepository.shared
 
     var body: some View {
         Group {
-            if hasBundledLogo {
-                Image("Logos/\(abbr)").resizable().scaledToFit()
-            } else if let url = logoURL {
+            if hasBundledImage {
+                Image("\(style.assetNamespace)/\(abbr)").resizable().scaledToFit()
+            } else if style == .logo, let url = logoURL {
                 AsyncImage(url: url, transaction: Transaction(animation: .default)) { phase in
                     switch phase {
                     case .success(let image):
@@ -33,17 +46,18 @@ struct TeamLogoView: View {
         .accessibilityLabel(Text(accessibilityLabel))
     }
 
-    private var accessibilityLabel: String {
-        if let name = repo.team(abbr: abbr)?.displayName { return "\(name) logo" }
-        return "\(abbr) logo"
-    }
-
-    private var hasBundledLogo: Bool {
+    private var hasBundledImage: Bool {
         #if canImport(UIKit)
-        return UIImage(named: "Logos/\(abbr)") != nil
+        return UIImage(named: "\(style.assetNamespace)/\(abbr)") != nil
         #else
         return false
         #endif
+    }
+
+    private var accessibilityLabel: String {
+        let descriptor = style == .helmet ? "helmet" : "logo"
+        if let name = repo.team(abbr: abbr)?.displayName { return "\(name) \(descriptor)" }
+        return "\(abbr) \(descriptor)"
     }
 
     private var logoURL: URL? {

@@ -17,8 +17,35 @@ struct GameDetailView: View {
             .padding(16)
         }
         .navigationTitle("\(game.awayTeam) @ \(game.homeTeam)")
+        .navigationSubtitle("Week \(game.week) · \(String(game.season))")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                ShareLink(item: shareSummary) {
+                    Image(systemName: "square.and.arrow.up")
+                }
+                .accessibilityLabel("Share matchup")
+            }
+        }
         .task { await loadOdds() }
+    }
+
+    private var shareSummary: String {
+        var lines: [String] = ["\(game.awayTeam) @ \(game.homeTeam) — Week \(game.week), \(game.season)"]
+        if let prediction {
+            if let pick = prediction.bestBet {
+                let strength = prediction.bestBetStrength.map { " (\($0))" } ?? ""
+                lines.append("Model pick: \(pick)\(strength)")
+            }
+            lines.append(String(format: "Predicted margin: %+.1f (home)", prediction.predHomeMargin))
+            if let cover = prediction.predCoverProbCal {
+                lines.append("Calibrated cover: \(Int(cover * 100))%")
+            }
+        }
+        if let home = game.homeScore, let away = game.awayScore, game.isFinal {
+            lines.append("Final: \(game.awayTeam) \(away) — \(game.homeTeam) \(home)")
+        }
+        return lines.joined(separator: "\n")
     }
 
     // MARK: - Odds

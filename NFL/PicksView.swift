@@ -881,7 +881,7 @@ private struct PickGameSheet: View {
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.tertiary)
                     .textCase(.uppercase)
-                TeamLogoView(abbr: abbr, size: 52)
+                TeamLogoView(abbr: abbr, size: 56, style: .helmet)
                 Text(abbr)
                     .font(.title2.weight(.bold))
             }
