@@ -30,6 +30,12 @@ struct TeamLogoView: View {
         }
         .frame(width: size, height: size)
         .task { await repo.ensureLoaded() }
+        .accessibilityLabel(Text(accessibilityLabel))
+    }
+
+    private var accessibilityLabel: String {
+        if let name = repo.team(abbr: abbr)?.displayName { return "\(name) logo" }
+        return "\(abbr) logo"
     }
 
     private var hasBundledLogo: Bool {

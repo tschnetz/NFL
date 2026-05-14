@@ -516,6 +516,7 @@ struct PicksView: View {
             }
             .buttonStyle(.plain)
             .disabled(model.isMutating)
+            .accessibilityLabel("Advance turn")
         }
     }
 
@@ -649,6 +650,7 @@ struct PicksView: View {
     private func pickRow(item: (gameId: Int, entry: PickEntry), picker: String) -> some View {
         let game = model.game(byEspnId: item.gameId)
         let pickedAbbr = pickedAbbreviation(for: item.entry, in: game)
+        let teamColor = pickedAbbr.flatMap { TeamRepository.shared.team(abbr: $0)?.primarySwiftUIColor }
         return HStack(spacing: 10) {
             if let abbr = pickedAbbr {
                 TeamLogoView(abbr: abbr, size: 24)
@@ -657,6 +659,7 @@ struct PicksView: View {
                 HStack(spacing: 6) {
                     Text(pickedAbbr ?? item.entry.teamName ?? "—")
                         .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(teamColor ?? .primary)
                     if item.entry.double {
                         Text("2×")
                             .font(.caption2.weight(.bold))
@@ -696,6 +699,7 @@ struct PicksView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(model.isMutating)
+                .accessibilityLabel("Remove pick")
             }
         }
         .padding(.vertical, 6)

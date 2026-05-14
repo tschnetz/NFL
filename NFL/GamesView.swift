@@ -90,7 +90,13 @@ struct GamesView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) { seasonMenu }
             }
-            .task { await model.reload() }
+            .task {
+                await model.reload()
+                while !Task.isCancelled {
+                    do { try await Task.sleep(for: .seconds(30)) } catch { return }
+                    await model.reload()
+                }
+            }
             .refreshable { await model.reload() }
         }
     }
@@ -209,18 +215,20 @@ private struct GameRowView: View {
     }
 
     private func teamLine(abbr: String, score: Int?, isWinner: Bool) -> some View {
-        HStack(spacing: 10) {
+        let teamColor = TeamRepository.shared.team(abbr: abbr)?.primarySwiftUIColor
+        return HStack(spacing: 10) {
             TeamLogoView(abbr: abbr, size: 26)
             Text(abbr)
                 .font(.headline)
                 .frame(width: 44, alignment: .leading)
-                .foregroundStyle(.primary)
+                .foregroundStyle(teamColor ?? .primary)
             Spacer(minLength: 0)
             Text(score.map(String.init) ?? "—")
                 .font(.title3.weight(isWinner ? .bold : .regular))
                 .monospacedDigit()
                 .foregroundStyle(isWinner ? .primary : .secondary)
         }
+        .accessibilityElement(children: .combine)
     }
 
     private var statusBlock: some View {
