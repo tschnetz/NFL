@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TeamsView: View {
     @Environment(WeekSelection.self) private var selection
+    @Environment(AppSettings.self) private var settings
     @State private var repo = TeamRepository.shared
     @State private var search: String = ""
     @State private var conferenceFilter: ConferenceTag = .both
@@ -51,6 +52,17 @@ struct TeamsView: View {
                             NavigationLink(value: team.abbreviation) {
                                 row(team)
                             }
+                            .swipeActions(edge: .trailing) {
+                                let isFav = settings.favoriteTeamAbbrs
+                                    .contains(team.abbreviation)
+                                Button {
+                                    settings.toggleFavorite(team.abbreviation)
+                                } label: {
+                                    Label(isFav ? "Unfavorite" : "Favorite",
+                                          systemImage: isFav ? "star.slash" : "star")
+                                }
+                                .tint(isFav ? .secondary : .yellow)
+                            }
                         }
                     }
                 }
@@ -60,7 +72,8 @@ struct TeamsView: View {
     }
 
     private func row(_ team: Team) -> some View {
-        HStack(spacing: 12) {
+        let isFavorite = settings.favoriteTeamAbbrs.contains(team.abbreviation)
+        return HStack(spacing: 12) {
             TeamLogoView(abbr: team.abbreviation, size: 30)
             VStack(alignment: .leading, spacing: 2) {
                 Text(team.displayName)
@@ -71,6 +84,12 @@ struct TeamsView: View {
                     .foregroundStyle(.tertiary)
             }
             Spacer()
+            if isFavorite {
+                Image(systemName: "star.fill")
+                    .font(.caption)
+                    .foregroundStyle(.yellow)
+                    .accessibilityLabel("Favorite")
+            }
         }
         .padding(.vertical, 2)
         .accessibilityElement(children: .combine)

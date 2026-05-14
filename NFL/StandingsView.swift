@@ -11,13 +11,17 @@ final class StandingsViewModel {
         self.client = client
     }
 
-    func load(season: Int) async {
+    func load(season: Int, includePostseason: Bool) async {
         state = .loading
         do {
             let path = "/api/standings/divisional"
             let payload: DivisionalStandings = try await client.get(
                 path,
-                queryItems: [URLQueryItem(name: "season", value: String(season))]
+                queryItems: [
+                    URLQueryItem(name: "season", value: String(season)),
+                    URLQueryItem(name: "seasonType",
+                                 value: includePostseason ? "all" : "regular"),
+                ]
             )
             state = .loaded(payload)
         } catch {
@@ -30,6 +34,7 @@ struct StandingsView: View {
     @Environment(WeekSelection.self) private var selection
     @State private var model = StandingsViewModel()
     @State private var conferenceFilter: ConferenceFilter = .both
+    @State private var includePostseason: Bool = false
 
     enum ConferenceFilter: String, CaseIterable, Identifiable {
         case both = "Both"
@@ -43,10 +48,18 @@ struct StandingsView: View {
             content
                 .navigationTitle("Standings")
                 .toolbar { toolbarContent }
-                .task(id: selection.year) { await model.load(season: selection.year) }
-                .refreshable { await model.load(season: selection.year) }
+                .task(id: pivotKey) {
+                    await model.load(season: selection.year,
+                                     includePostseason: includePostseason)
+                }
+                .refreshable {
+                    await model.load(season: selection.year,
+                                     includePostseason: includePostseason)
+                }
         }
     }
+
+    private var pivotKey: String { "\(selection.year)-\(includePostseason)" }
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
@@ -64,6 +77,9 @@ struct StandingsView: View {
                             }
                         }
                     }
+                }
+                Section {
+                    Toggle("Include postseason", isOn: $includePostseason)
                 }
             } label: {
                 HStack(spacing: 4) {
