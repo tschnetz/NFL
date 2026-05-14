@@ -6,6 +6,9 @@ struct RootView: View {
             GamesView()
                 .tabItem { Label("Games", systemImage: "sportscourt") }
 
+            ResultsView()
+                .tabItem { Label("Results", systemImage: "trophy") }
+
             PredictionsView()
                 .tabItem { Label("Predictions", systemImage: "chart.bar.xaxis") }
 

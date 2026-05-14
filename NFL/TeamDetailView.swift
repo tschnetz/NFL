@@ -77,6 +77,7 @@ struct TeamDetailView: View {
     let abbr: String
 
     @Environment(WeekSelection.self) private var selection
+    @Environment(AppSettings.self) private var settings
     @State private var model = TeamDetailViewModel()
     @State private var subtab: SubTab = .schedule
 
@@ -102,12 +103,27 @@ struct TeamDetailView: View {
         .navigationTitle(team?.displayName ?? abbr)
         .navigationSubtitle(divisionLabel)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    settings.toggleFavorite(abbr)
+                } label: {
+                    Image(systemName: isFavorite ? "star.fill" : "star")
+                        .foregroundStyle(isFavorite ? Color.yellow : .secondary)
+                }
+                .accessibilityLabel(isFavorite ? "Unfavorite team" : "Favorite team")
+            }
+        }
         .task(id: pivotKey) {
             await model.loadAll(abbr: abbr, season: selection.year)
         }
         .refreshable {
             await model.loadAll(abbr: abbr, season: selection.year)
         }
+    }
+
+    private var isFavorite: Bool {
+        settings.favoriteTeamAbbrs.contains(abbr)
     }
 
     private var pivotKey: String { "\(abbr)-\(selection.year)" }
