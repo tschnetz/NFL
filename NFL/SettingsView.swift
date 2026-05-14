@@ -77,11 +77,52 @@ struct SettingsView: View {
                             .font(.caption.monospaced())
                             .foregroundStyle(.tertiary)
                     }
+                    HStack {
+                        Text("iCloud sync")
+                        Spacer()
+                        Text(cloudLabel)
+                            .font(.caption)
+                            .foregroundStyle(cloudColor)
+                    }
+                    if let when = settings.lastCloudSyncAt {
+                        HStack {
+                            Text("Last sync")
+                            Spacer()
+                            Text(when, format: .relative(presentation: .named))
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    Button("Force iCloud sync") {
+                        settings.forceCloudSync()
+                    }
+                    .disabled(!kvsConfigured)
                 } header: {
                     Text("About")
                 }
             }
             .navigationTitle("Settings")
+        }
+    }
+
+    private var kvsConfigured: Bool {
+        settings.cloudSyncStatus != .unavailable
+    }
+
+    private var cloudLabel: String {
+        switch settings.cloudSyncStatus {
+        case .synced: "Synced"
+        case .failed: "Sync failed"
+        case .accountUnavailable: "Sign in to iCloud"
+        case .unavailable: "Not configured"
+        }
+    }
+
+    private var cloudColor: Color {
+        switch settings.cloudSyncStatus {
+        case .synced: .green
+        case .failed: .orange
+        case .accountUnavailable, .unavailable: .secondary
         }
     }
 }
