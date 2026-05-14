@@ -31,8 +31,18 @@ actor APIClient {
         self.decoder = JSONDecoder.nflBackend
     }
 
-    func get<T: Decodable & Sendable>(_ path: String, as _: T.Type = T.self) async throws -> T {
-        let url = baseURL.appending(path: path)
+    func get<T: Decodable & Sendable>(
+        _ path: String,
+        queryItems: [URLQueryItem] = [],
+        as _: T.Type = T.self
+    ) async throws -> T {
+        var components = URLComponents(url: baseURL.appending(path: path),
+                                       resolvingAgainstBaseURL: false)!
+        if !queryItems.isEmpty {
+            components.queryItems = queryItems
+        }
+        guard let url = components.url else { throw APIError.badResponse }
+
         var request = URLRequest(url: url)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
@@ -50,6 +60,17 @@ actor APIClient {
 
 extension JSONDecoder {
     nonisolated static let nflBackend: JSONDecoder = {
+        // Patterns the backend emits across routers:
+        //   ESPN passthrough:  "2026-02-08T23:30Z"
+        //   nflverse schedule: "2024-09-05T20:20:00+00:00"
+        //   picks/admin:       "2026-05-14T16:32:05.994319Z"
+        let patterns = [
+            "yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXXXX",
+            "yyyy-MM-dd'T'HH:mm:ss.SSSXXXXX",
+            "yyyy-MM-dd'T'HH:mm:ssXXXXX",
+            "yyyy-MM-dd'T'HH:mm'Z'",
+        ]
+
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
@@ -58,11 +79,7 @@ extension JSONDecoder {
             let formatter = DateFormatter()
             formatter.locale = Locale(identifier: "en_US_POSIX")
             formatter.timeZone = TimeZone(secondsFromGMT: 0)
-
-            // ESPN passthrough emits "2026-02-08T23:30Z"; nflverse routes use full ISO8601.
-            for pattern in ["yyyy-MM-dd'T'HH:mm'Z'",
-                            "yyyy-MM-dd'T'HH:mm:ssZ",
-                            "yyyy-MM-dd'T'HH:mm:ss.SSSZ"] {
+            for pattern in patterns {
                 formatter.dateFormat = pattern
                 if let date = formatter.date(from: raw) { return date }
             }
