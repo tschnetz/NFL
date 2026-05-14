@@ -3,53 +3,49 @@ import SwiftUI
 /// Drill-down menu for secondary surfaces — Teams, Standings, Predictions,
 /// Settings. Keeps the top-level tab bar at 5 (Scoreboard / Schedule /
 /// Results / More / Picks) like Pigskin.
+///
+/// Uses closure-based NavigationLinks (not value+navigationDestination)
+/// to avoid a SwiftUI-internal matching issue where the nested
+/// `Destination` enum failed to resolve under `.tabViewStyle(.sidebarAdaptable)`.
 struct MoreView: View {
     var body: some View {
         NavigationStack {
             List {
                 Section {
-                    NavigationLink(value: Destination.teams) {
-                        row(systemImage: "person.3", title: "Teams",
+                    NavigationLink {
+                        TeamsView()
+                    } label: {
+                        row(systemImage: "person.3",
+                            title: "Teams",
                             subtitle: "Roster, stats, schedule per team")
                     }
-                    NavigationLink(value: Destination.standings) {
-                        row(systemImage: "list.number", title: "Standings",
+                    NavigationLink {
+                        StandingsView()
+                    } label: {
+                        row(systemImage: "list.number",
+                            title: "Standings",
                             subtitle: "AFC / NFC by division")
                     }
-                    NavigationLink(value: Destination.predictions) {
-                        row(systemImage: "chart.bar.xaxis", title: "Predictions",
+                    NavigationLink {
+                        PredictionsView()
+                    } label: {
+                        row(systemImage: "chart.bar.xaxis",
+                            title: "Predictions",
                             subtitle: "Weekly model summary")
                     }
                 }
 
                 Section {
-                    NavigationLink(value: Destination.settings) {
-                        row(systemImage: "gearshape", title: "Settings",
+                    NavigationLink {
+                        SettingsView()
+                    } label: {
+                        row(systemImage: "gearshape",
+                            title: "Settings",
                             subtitle: "Picker, theme, API, favorites, iCloud")
                     }
                 }
             }
             .navigationTitle("More")
-            .navigationDestination(for: Destination.self) { destination in
-                destination.view
-            }
-        }
-    }
-
-    enum Destination: Hashable {
-        case teams
-        case standings
-        case predictions
-        case settings
-
-        @ViewBuilder
-        var view: some View {
-            switch self {
-            case .teams: TeamsView()
-            case .standings: StandingsView()
-            case .predictions: PredictionsView()
-            case .settings: SettingsView()
-            }
         }
     }
 
