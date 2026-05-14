@@ -42,21 +42,17 @@ struct ScheduleView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                weekChips
-                Divider().opacity(0.5)
-                content
-            }
-            .navigationTitle("Schedule")
-            .navigationSubtitle(String(model.season))
-            .task {
-                await model.reload()
-                while !Task.isCancelled {
-                    do { try await Task.sleep(for: .seconds(60)) } catch { return }
+            content
+                .navigationTitle("Schedule")
+                .navigationSubtitle(String(model.season))
+                .task {
                     await model.reload()
+                    while !Task.isCancelled {
+                        do { try await Task.sleep(for: .seconds(60)) } catch { return }
+                        await model.reload()
+                    }
                 }
-            }
-            .refreshable { await model.reload() }
+                .refreshable { await model.reload() }
         }
     }
 
@@ -65,24 +61,8 @@ struct ScheduleView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(model.availableWeeks, id: \.self) { week in
-                        Button {
-                            model.week = week
-                        } label: {
-                            Text("Week \(week)")
-                                .font(.subheadline.weight(.medium))
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
-                                .background {
-                                    Capsule().fill(
-                                        model.week == week
-                                        ? AnyShapeStyle(.tint)
-                                        : AnyShapeStyle(.background.secondary)
-                                    )
-                                }
-                                .foregroundStyle(model.week == week ? Color.white : .primary)
-                                .id(week)
-                        }
-                        .buttonStyle(.plain)
+                        weekChip(week)
+                            .id(week)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -93,6 +73,26 @@ struct ScheduleView: View {
                 withAnimation { proxy.scrollTo(new, anchor: .center) }
             }
         }
+    }
+
+    private func weekChip(_ week: Int) -> some View {
+        let isSelected = model.week == week
+        return Button {
+            model.week = week
+        } label: {
+            Text("Week \(week)")
+                .font(.subheadline.weight(.medium))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .foregroundStyle(isSelected ? Color.white : .primary)
+                .background(
+                    Capsule().fill(isSelected ? Color.accentColor : Color.gray.opacity(0.18))
+                )
+                .overlay(
+                    Capsule().strokeBorder(isSelected ? Color.clear : Color.gray.opacity(0.25), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -111,15 +111,25 @@ struct ScheduleView: View {
                                        systemImage: "calendar.badge.exclamationmark",
                                        description: Text("Week \(model.week) of \(String(model.season)) isn’t available yet."))
             } else {
-                List(games) { game in
-                    NavigationLink {
-                        GameDetailView(game: game, prediction: nil)
-                    } label: {
-                        ScheduleRow(game: game)
+                List {
+                    Section {
+                        weekChips
+                            .listRowInsets(EdgeInsets())
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
                     }
-                    .buttonStyle(.plain)
-                    .listRowInsets(.init(top: 6, leading: 16, bottom: 6, trailing: 16))
-                    .listRowSeparator(.hidden)
+                    Section {
+                        ForEach(games) { game in
+                            NavigationLink {
+                                GameDetailView(game: game, prediction: nil)
+                            } label: {
+                                ScheduleRow(game: game)
+                            }
+                            .buttonStyle(.plain)
+                            .listRowInsets(.init(top: 6, leading: 16, bottom: 6, trailing: 16))
+                            .listRowSeparator(.hidden)
+                        }
+                    }
                 }
                 .listStyle(.plain)
             }

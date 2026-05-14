@@ -80,24 +80,20 @@ struct ResultsView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                weekChips
-                Divider().opacity(0.5)
-                content
-            }
-            .navigationTitle("Results")
-            .navigationSubtitle("\(String(model.season)) · Week \(model.week)")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) { seasonWeekMenu }
-            }
-            .task {
-                await model.reload()
-                while !Task.isCancelled {
-                    do { try await Task.sleep(for: .seconds(60)) } catch { return }
-                    await model.reload()
+            content
+                .navigationTitle("Results")
+                .navigationSubtitle("\(String(model.season)) · Week \(model.week)")
+                .toolbar {
+                    ToolbarItem(placement: .primaryAction) { seasonWeekMenu }
                 }
-            }
-            .refreshable { await model.reload() }
+                .task {
+                    await model.reload()
+                    while !Task.isCancelled {
+                        do { try await Task.sleep(for: .seconds(60)) } catch { return }
+                        await model.reload()
+                    }
+                }
+                .refreshable { await model.reload() }
         }
     }
 
@@ -148,24 +144,8 @@ struct ResultsView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(model.availableWeeks, id: \.self) { week in
-                        Button {
-                            model.week = week
-                        } label: {
-                            Text("Week \(week)")
-                                .font(.subheadline.weight(.medium))
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
-                                .background {
-                                    Capsule().fill(
-                                        model.week == week
-                                        ? AnyShapeStyle(.tint)
-                                        : AnyShapeStyle(.background.secondary)
-                                    )
-                                }
-                                .foregroundStyle(model.week == week ? Color.white : .primary)
-                                .id(week)
-                        }
-                        .buttonStyle(.plain)
+                        weekChip(week)
+                            .id(week)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -176,6 +156,26 @@ struct ResultsView: View {
                 withAnimation { proxy.scrollTo(new, anchor: .center) }
             }
         }
+    }
+
+    private func weekChip(_ week: Int) -> some View {
+        let isSelected = model.week == week
+        return Button {
+            model.week = week
+        } label: {
+            Text("Week \(week)")
+                .font(.subheadline.weight(.medium))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .foregroundStyle(isSelected ? Color.white : .primary)
+                .background(
+                    Capsule().fill(isSelected ? Color.accentColor : Color.gray.opacity(0.18))
+                )
+                .overlay(
+                    Capsule().strokeBorder(isSelected ? Color.clear : Color.gray.opacity(0.25), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -207,6 +207,12 @@ struct ResultsView: View {
         let finalGames = games.filter { $0.isFinal }
         let pendingGames = games.filter { !$0.isFinal }
         return List {
+            Section {
+                weekChips
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+            }
             if !favoriteGames.isEmpty {
                 Section("Favorites") {
                     ForEach(favoriteGames) { game in
