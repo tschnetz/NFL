@@ -20,7 +20,8 @@ final class GamesViewModel {
     var schedule: LoadState<[ScheduleGame]> = .idle
     var predictions: LoadState<[Int: GamePrediction]> = .idle
 
-    let availableSeasons: [Int] = [2024, 2023, 2022, 2021, 2020]
+    /// 1999 is nflverse's earliest fully-covered season.
+    let availableSeasons: [Int] = Array((1999...WeekSelection.defaultYear).reversed())
     let availableWeeks: [Int] = Array(1...18)
 
     private let client: APIClient

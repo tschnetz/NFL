@@ -23,7 +23,9 @@ final class WeekSelection {
         self.year = year
         self.seasonType = seasonType
         self.week = week
-        self.availableSeasons = Array((2020...WeekSelection.defaultYear).reversed())
+        /// 1999 is nflverse's earliest fully-covered season; the backend
+        /// `predictions` table accepts seasons 1999–2100.
+        self.availableSeasons = Array((1999...WeekSelection.defaultYear).reversed())
         self.availableWeeks = Array(1...18)
     }
 
