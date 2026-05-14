@@ -57,7 +57,8 @@ struct GameDetailView: View {
     }
 
     private func teamColumn(abbr: String, score: Int?, isWinner: Bool) -> some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 6) {
+            TeamLogoView(abbr: abbr, size: 56)
             Text(abbr)
                 .font(.title2.weight(.bold))
             Text(score.map(String.init) ?? "—")

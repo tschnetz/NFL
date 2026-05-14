@@ -210,6 +210,7 @@ private struct GameRowView: View {
 
     private func teamLine(abbr: String, score: Int?, isWinner: Bool) -> some View {
         HStack(spacing: 10) {
+            TeamLogoView(abbr: abbr, size: 26)
             Text(abbr)
                 .font(.headline)
                 .frame(width: 44, alignment: .leading)

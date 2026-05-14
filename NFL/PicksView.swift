@@ -10,7 +10,6 @@ final class PicksViewModel {
 
     var state: LoadState<PicksState> = .idle
     var schedule: LoadState<[ScheduleGame]> = .idle
-    var teams: LoadState<[String: Team]> = .idle
 
     var actionError: String?
     var isMutating: Bool = false
@@ -47,8 +46,7 @@ final class PicksViewModel {
     }
 
     func team(byAbbr abbr: String) -> Team? {
-        if case .loaded(let map) = teams { return map[abbr] }
-        return nil
+        TeamRepository.shared.team(abbr: abbr)
     }
 
     func game(byEspnId espnId: Int) -> ScheduleGame? {
@@ -66,7 +64,7 @@ final class PicksViewModel {
     func load() async {
         async let a: () = loadState()
         async let b: () = loadSchedule()
-        async let c: () = loadTeams()
+        async let c: () = TeamRepository.shared.ensureLoaded()
         _ = await (a, b, c)
     }
 
@@ -106,18 +104,6 @@ final class PicksViewModel {
             schedule = .loaded(res.games)
         } catch {
             schedule = .failed(error.localizedDescription)
-        }
-    }
-
-    private func loadTeams() async {
-        if case .loaded = teams { return }
-        teams = .loading
-        do {
-            let res: TeamsResponse = try await client.get("/api/team")
-            let map = Dictionary(uniqueKeysWithValues: res.teams.map { ($0.abbreviation, $0) })
-            teams = .loaded(map)
-        } catch {
-            teams = .failed(error.localizedDescription)
         }
     }
 
@@ -428,7 +414,10 @@ struct PicksView: View {
     private func pickRow(item: (gameId: Int, entry: PickEntry), picker: String) -> some View {
         let game = model.game(byEspnId: item.gameId)
         let pickedAbbr = pickedAbbreviation(for: item.entry, in: game)
-        return HStack {
+        return HStack(spacing: 10) {
+            if let abbr = pickedAbbr {
+                TeamLogoView(abbr: abbr, size: 24)
+            }
             VStack(alignment: .leading, spacing: 2) {
                 Text(pickedAbbr ?? item.entry.teamName ?? "—")
                     .font(.subheadline.weight(.semibold))
@@ -573,7 +562,11 @@ private struct PickGameSheet: View {
                 Button {
                     selectedGame = game
                 } label: {
-                    HStack {
+                    HStack(spacing: 10) {
+                        HStack(spacing: 4) {
+                            TeamLogoView(abbr: game.awayTeam, size: 22)
+                            TeamLogoView(abbr: game.homeTeam, size: 22)
+                        }
                         VStack(alignment: .leading, spacing: 2) {
                             Text("\(game.awayTeam) @ \(game.homeTeam)")
                                 .font(.subheadline.weight(.semibold))
@@ -623,16 +616,17 @@ private struct PickGameSheet: View {
 
     private func sideButton(abbr: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 6) {
+            VStack(spacing: 8) {
                 Text(label)
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.tertiary)
                     .textCase(.uppercase)
+                TeamLogoView(abbr: abbr, size: 52)
                 Text(abbr)
-                    .font(.title.weight(.bold))
+                    .font(.title2.weight(.bold))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 24)
+            .padding(.vertical, 20)
             .background(.background.secondary, in: .rect(cornerRadius: 14))
         }
         .buttonStyle(.plain)
