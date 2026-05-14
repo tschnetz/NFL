@@ -127,11 +127,13 @@ output of `training/score_and_publish.py` to Upstash at
 
 Stack:
 
-- Built around `nfl_data_py` (the Python library — schedules, weekly
-  stats, play-by-play with EPA, betting lines, injuries, snap counts).
-  **Not RapidAPI.** This is one of three reasons RapidAPI's
-  `/nfl-predictor` endpoint is unnecessary — we already have our own
-  model.
+- Built around `nfl_data_py` (the now-deprecated nflverse Python
+  library — schedules, weekly stats, play-by-play with EPA, betting
+  lines, injuries, snap counts). **Not RapidAPI.** This is one of
+  three reasons RapidAPI's `/nfl-predictor` endpoint is unnecessary —
+  we already have our own model. As part of the port into `app/ml/`
+  (Phase 7), swap the import to `nflreadpy` (same nflverse data,
+  active maintenance, drop-in API differences: `import_*` → `load_*`).
 - `training/train.py` — production training. GradientBoostingRegressor
   for margin, Ridge for totals, Platt calibration for win prob,
   isotonic calibration for cover prob, heteroskedastic sigma model.
@@ -250,15 +252,14 @@ of CFBD responses. NFL doesn't need that because:
 2. Picks state moves to Postgres rows, not Redis HSETs (see Phase 6).
 3. **Historical data is backfilled into Postgres locally** — same
    strategy Pigskin uses for CFBD season history. The new
-   `nfl_prod` DB gets a one-shot bulk load from `nfl_data_py`
-   (schedules, weekly stats, play-by-play summaries, betting lines,
-   injuries, snap counts) covering the seasons the model trains on
-   (~2016–prior). After that, the only external calls during a season
-   are for the **current week's** scoreboard, odds, and injury
-   updates — all from the ESPN gateway. Cache-misses go to nfl_data_py
-   for the current season's deltas; everything else is a local
-   Postgres read. Same pattern as Pigskin's
-   `alembic/versions/0002_historical_tables.py`.
+   `nfl_prod` DB gets a one-shot bulk load from `nflreadpy` (the
+   maintained nflverse successor to the deprecated `nfl_data_py`):
+   schedules, weekly stats, play-by-play summaries, betting lines,
+   rosters, depth charts, injuries, snap counts — covering ~2016
+   through current. After that, a weekly refresh job pulls the same
+   tables forward; live in-game state comes from the ESPN gateway.
+   No per-request fan-out to external APIs from user-facing endpoints.
+   Same pattern as Pigskin's `alembic/versions/0002_historical_tables.py`.
 
 If we ever need a hot cache, Redis is already running on `:6379` — just
 add a client. Don't bother on day one.
@@ -288,58 +289,118 @@ Cloudflare terminates TLS; FastAPI listens on plain HTTP at
 
 ---
 
-## Phase 0 — ESPN gateway gap analysis (do this first)
+## Phase 0 — Data-source split: ESPN gateway + nflverse (do this first)
 
-**Decision the rest of the plan depends on:** what does the current
-`espn_service` already cover, what's missing, and what do we fill with
-upstream ESPN calls (added to the gateway), our own ingest, or a
-temporary RapidAPI bridge?
+**Decision the rest of the plan depends on:** for each RapidAPI call
+the React app makes today, what's the cleanest free replacement —
+ESPN gateway (live current-day data), `nflreadpy` / nflverse (weekly
+snapshots, completed-game data, historical tables), or something
+else?
 
-Walk every RapidAPI call and decide:
+The audit-verified ESPN gateway state (as of 2026-05-13) ships exactly
+6 client methods (`get_teams`, `get_scoreboard`, `get_standings`,
+`get_news`, `get_league_injuries`, `passthrough`) — **not** the
+broader set of `get_team_stats` / `get_team_leaders` / `get_odds` /
+`get_cdn_game` etc. this doc originally assumed. Building 7 new
+gateway endpoints to wrap RapidAPI-equivalent ESPN calls is the wrong
+fight when nflverse already serves most of that surface for free, via
+parquet downloads, with no rate limit. The right split:
 
-| RapidAPI today | ESPN coverage | Plan |
+**ESPN gateway** — for data that has to be live within minutes during
+a game. Scoreboard ticks, in-game state, live scoring plays during a
+game, standings, news, injuries. Already shipped or trivial extensions.
+
+**`nflreadpy`** (the maintained successor to the deprecated
+`nfl_data_py`) — for everything else. Rosters, depth charts, team
+stats, team leaders, settled betting lines, completed-game boxscores +
+scoring plays, snap counts, advanced metrics, historical seasons.
+Weekly refresh into Postgres tables; no live API at request time.
+
+Per-endpoint decisions:
+
+| RapidAPI today | Replacement | Plan |
 |---|---|---|
-| `/nfl-scoreboard` (week/day/year) | ESPN `/sports/football/nfl/scoreboard` + dated queries. Gateway exposes `/api/v1/events/?league=nfl&date=YYYY-MM-DD` and ingests scoreboards hourly via `refresh_scoreboard_task`. | **Replace.** Increase scoreboard cadence to ~2 min during NFL game windows (Sun/Mon/Thu/Sat). See ESPN_SERVICE.md §6.1 — same freshness gap SportsBar hit. |
-| `/nfl-gamesummary` (boxscore) | ESPN CDN `site.web.api.espn.com/.../scoreboard?event=ID` returns linescore + team stats. ESPN Core also has plays + drives. Not yet exposed in gateway. | **Replace.** Add `/api/v1/events/{id}/summary` to gateway (or call ESPN client method `get_cdn_game()` from the NFL backend directly during development; fold into gateway once stable). |
-| `/nfl-team-record` (standings) | ESPN `/apis/v2/sports/football/nfl/standings`. Gateway has `ESPNClient.get_standings()` but not exposed as REST. | **Add REST endpoint to gateway** (`/api/v1/standings/?league=nfl`), backfill DB ingest later. |
-| `/nfl-team-roster` + `/nfl-depth-chart` | ESPN `/teams/{id}/roster` + `/teams/{id}/depthcharts`. Client methods exist; no DB model in gateway. | **Add to gateway** as on-demand endpoint (`/api/v1/teams/{espn_id}/roster`); skip DB persistence for v1 — let the NFL backend cache responses in its own Postgres if needed. |
-| `/nfl-team-statistics` | ESPN Core `/teams/{id}/statistics?season=YYYY`. Client method `get_team_stats()` exists. | **Add to gateway** REST endpoint. |
-| `/nfl-team-leaders` | ESPN Core `/teams/{id}/leaders`. | **Add to gateway** REST endpoint. |
-| `/nfl-singlevenue` | ESPN events embed venue ESPN ID; gateway has `Venue` model with `name, city, state, is_indoor, capacity` populated from scoreboard ingest. Not all NFL venues yet. | **Use gateway** for fields it has (`/api/v1/venues/{espn_id}`). Keep current `nfl:venues:2025` static dataset (the React app's `venueWeatherMapping.js`) as a local seed — it has weather-station coordinates the ESPN gateway won't have. Ship that as a CSV/JSON in `app/data/venues.json` and read it at startup. |
-| `/nfl-betting-odds` | ESPN `/events/{id}/competitions/{id}/odds` — `ESPNClient.get_odds()` exists but not yet REST-exposed. | **Add to gateway** REST endpoint. |
-| `/nfl-scoringplays` | ESPN `/events/{id}/competitions/{id}/plays?type=scoring`. | **Add to gateway** REST endpoint, **or** derive from full plays in `get_cdn_game()`. |
-| `/nfl-predictor` (win prob model) | ESPN `/events/{id}/competitions/{id}/probabilities` is per-snap win-prob *during* a live game, not pre-game. | **Drop entirely.** We don't need a RapidAPI predictor at all — `nfl_predictor` (Gridiron API) already does this and is what the React app actually reads (via Upstash). The migration step is to port `nfl_predictor` into `app/ml/` (see Phase 7), then point `previewService` and the React `useWeeklyPredictions` equivalent at the Postgres `predictions` table. ESPN's live in-game win-prob is a nice-to-have for the LiveGameModal — add it as a separate small endpoint, don't conflate with pre-game predictions. |
-| Weather (`backend/services/weatherService.js`) | Not ESPN. | **Keep as external call** (Open-Meteo is free). Move into the new backend as `app/services/weather.py` with httpx + a Postgres `weather_cache` table keyed by `(lat, lon, hour_truncated_iso)`. |
+| `/nfl-scoreboard` (week/day/year) | **ESPN gateway** | `GET /api/v1/events/?league=nfl&date=YYYY-MM-DD` already DB-backed, refreshed every 120s during live games. Small patch: add `week` filter param. Increase cadence to ~2 min during NFL game windows if not already. |
+| `/nfl-team-record` (standings) | **ESPN gateway** | `GET /api/v1/standings/?league=nfl` already DB-backed at 6h cadence. Small patch: add `playoff_seed` column to `Standing` model (ESPN returns it in `standings.entries[].stats[]` but ingest currently skips it). |
+| `/nfl-singlevenue` | **NFL backend static seed** | Gateway's `Venue` model auto-populates from scoreboard ingest but `capacity`/`indoor` are inconsistently set by ESPN. Ship a curated `app/data/venues.json` covering all 32 NFL stadiums (ported from the React app's `venueWeatherMapping.js`, which also has weather-station coordinates). Read at startup. **No gateway change required.** |
+| `/nfl-gamesummary` (boxscore) | **nflverse for completed games, ESPN passthrough for live current week** | Completed games: derive linescore + team stats from `nflreadpy.load_pbp()` + `load_player_stats()` rolled to game grain. Live current-week game: optionally add a passthrough route to the gateway forwarding ESPN's CDN summary endpoint with a 60s TTL (one-line addition since gateway already has `passthrough()`). |
+| `/nfl-team-roster` | **nflverse** | `nflreadpy.load_rosters_weekly(seasons=...)` returns the per-player roster — exactly what the React Team page renders. Refresh weekly into a `rosters_weekly` Postgres table. |
+| `/nfl-depth-chart` | **nflverse** | `nflreadpy.load_depth_charts(seasons=...)`. Refresh weekly into a `depth_charts` table. Merge with rosters in `app/services/roster.py` to match the React app's combined response shape. |
+| `/nfl-team-statistics` | **nflverse** | Aggregate from `nflreadpy.load_pbp()` (offensive/defensive EPA, success rate, etc.) — or use the prebuilt `load_team_stats(...)` if applicable. Refresh weekly into a `team_stats_season` table. |
+| `/nfl-team-leaders` | **nflverse** | Top-N per category from `nflreadpy.load_player_stats(seasons=...)` sorted server-side at query time. No new ingest needed beyond the player-stats refresh; compute on read. |
+| `/nfl-betting-odds` | **nflverse for settled; ESPN gateway for live** | `nflreadpy.load_schedules()` includes spread/total/moneyline at close. For intraday live movement (rare requirement — only `useEventOddsBatch` on the Picks page uses it pre-lock), add a small gateway passthrough route forwarding ESPN's odds endpoint. |
+| `/nfl-scoringplays` | **nflverse for completed; ESPN gateway for live** | Completed games: filter `nflreadpy.load_pbp()` to scoring rows. Live-game updates inside `LiveGameModal`: add a passthrough route forwarding ESPN's scoring-plays endpoint with a 30–60s TTL. |
+| `/nfl-predictor` (win-prob model) | **Drop entirely** | Replaced by the ML port (`nfl_predictor` → `app/ml/`, Phase 7). The React app already reads Gridiron API output; this just moves the producer in-process. |
+| Weather (`backend/services/weatherService.js`) | **Open-Meteo (unchanged)** | Move into the new backend as `app/services/weather.py` with httpx + a Postgres `weather_cache` table keyed by `(lat, lon, hour_truncated_iso)`. |
 
 ### What this means in terms of order of operations
 
-1. **First, while RapidAPI is still active**: do the bulk historical
-   pull (Phase 3.5). This is a one-shot moment — the subscription is
-   paid through the migration; extract maximum value before
-   cancelling. Team stats, team records, venues, team leaders,
-   per-game boxscores + odds + scoring plays for every season we
-   care about → land in Postgres. Once done, none of these endpoints
-   need live RapidAPI access ever again.
-2. **Second**: scope a small set of gateway PRs to add the missing REST
-   endpoints (standings, team stats, team leaders, roster, odds, scoring
-   plays, event summary). These are thin wrappers around `ESPNClient`
-   methods that already exist. They cover the **current** season's data
-   that the backfill can't pre-populate. Cuts in-season network egress
-   to near-zero.
-3. **Third**: stand up the NFL FastAPI backend that calls the gateway
-   via loopback for everything covered. Port `nfl_predictor` into
-   `app/ml/` (Phase 7) — this happens in parallel with backend
-   scaffolding because it's a self-contained subsystem, not a
-   dependency of the rest of the routes.
-4. **Fourth**: with predictions served from Postgres, ESPN gateway
-   covering live current-day data, and historical tables backfilled,
-   **all** RapidAPI calls are gone. Cancel the subscription before
-   Phase 9 cutover, not after.
+1. **Two small gateway patches** (the only ESPN-side work needed for
+   day-one): add `week` query filter to `/events/`; add `playoff_seed`
+   column + ingest line to `Standing`. ~1 day total. Reusable across
+   SportsBar / WorldCup.
+2. **Optional gateway passthroughs** for the handful of *live*-only
+   endpoints (boxscore, scoring plays during a game, intraday odds).
+   These are 5–10 lines each — one passthrough route per endpoint
+   forwarding to ESPN's URL with a short TTL — and only need to land
+   before the LiveGameModal feature is wired in the SwiftUI client.
+3. **Build the nflverse refresh pipeline** in the NFL backend:
+   `app/services/nflverse.py` + `scripts/refresh_nflverse.py` +
+   `launchd/com.nfl.weekly.plist`. Weekly job (Tuesday morning ET,
+   after MNF) pulls `load_schedules`, `load_pbp`, `load_player_stats`,
+   `load_rosters_weekly`, `load_depth_charts`, `load_injuries`,
+   `load_snap_counts` into Postgres tables. First run is the
+   historical backfill (see Phase 3.5); subsequent runs upsert the
+   latest week's deltas.
+4. **Stand up the NFL FastAPI backend** that reads from those local
+   Postgres tables for everything except scoreboard / standings /
+   live-game endpoints (which call the gateway via loopback). Port
+   `nfl_predictor` into `app/ml/` (Phase 7) in parallel — same data
+   source (nflverse), same Postgres tables.
+5. **Cancel RapidAPI as soon as the new backend ships.** There is no
+   "bulk historical pull before cancellation" because nflverse already
+   has the same historical data (and more) for free — no need to drain
+   the paid subscription on the way out.
 
-The gateway changes are reusable across SportsBar, WorldCup, and any
-future personal app, so the effort isn't NFL-specific waste. The
-`nfl_predictor` port doesn't extend any shared infra — it's NFL-only
-ML work, same as Pigskin's `app/ml/` is CFB-only.
+The gateway patches and live passthroughs are reusable across
+SportsBar / WorldCup / any future Mini app. The nflverse pipeline is
+NFL-specific but mirrors how `nfl_predictor` (the existing predictor)
+already consumes the same data — no new tools to learn.
+
+### Live updates from the gateway (no external webhooks)
+
+There's no free public NFL webhook surface worth building around.
+Paid push feeds (Sportradar, SportsDataIO, Genius Sports) provide
+sub-second play-by-play push but at enterprise pricing ($300–$1,000+/mo
+for NFL). ESPN / NFL.com / nflverse don't push — ESPN is polling-only,
+nflverse is daily/weekly parquet snapshots. The Odds API has webhooks
+for odds movement only (~$30–60/mo) — could be useful for Picks pre-lock
+line shifts, but not worth the spend.
+
+**Use the gateway's existing Postgres `LISTEN/NOTIFY` channel.**
+SportsBar already does this (per MINI_ENV.md): the ESPN gateway emits
+NOTIFY on `espn_prod.event_changed` whenever its scoreboard ingest
+upserts an event row; SportsBar listens and fans out APNs silent
+pushes to wake the iOS widget. NFL gets the same wiring for free:
+
+1. ESPN gateway polls ESPN every 120s during live game windows
+   (existing behavior — `_has_live_event_for()` predicate).
+2. When an event row changes, gateway fires `NOTIFY event_changed,
+   '<event_id>'`.
+3. NFL backend's lifespan opens a long-lived asyncpg connection on
+   the gateway DB, `LISTEN event_changed`, and on each notification
+   either (a) refreshes its own cached `live_game_state` row for that
+   event, or (b) sends an APNs silent push to the SwiftUI client to
+   trigger a refresh of LiveGameModal / Scoreboard.
+
+Two-minute resolution is fine for the live UX — two-user fantasy
+picks don't need sub-second. This pattern gives the NFL app "webhook
+behavior" without an external service, riding on infra that's
+already paid for and proven.
+
+If a feature later needs faster than 120s (e.g. live scoring-play
+toasts), the lever is to tighten gateway poll cadence on `nfl`
+during game windows, not to bolt on a paid push service.
 
 ---
 
@@ -415,7 +476,7 @@ to Pigskin/Headline/Orbit/Braves. Copy Pigskin's layout almost verbatim.
 │       ├── best_bets.py             # scripts/best_bets.py (edge → Strong/Medium/Lean)
 │       ├── train.py                 # training/train.py
 │       ├── data/
-│       │   └── (sample inputs kept for tests; nfl_data_py fetches live in prod)
+│       │   └── (sample inputs kept for tests; nflverse-backed Postgres tables feed prod)
 │       └── models/
 │           ├── latest-margin.joblib       # symlink to newest model-YYYYMMDD-HHMMSS.joblib
 │           ├── latest-margin.meta.json
@@ -468,6 +529,7 @@ dependencies = [
   "httpx>=0.28",
   "joblib>=1.5",          # only needed once ML model ships
   "lightgbm~=4.6.0",      # ML — pinned for parity (same as Pigskin)
+  "nflreadpy>=0.4",       # nflverse data: schedules, PBP, rosters, depth, stats, injuries, snaps
   "numpy~=2.3.3",
   "pandas~=2.3.3",
   "pydantic-settings>=2.14",
@@ -533,16 +595,18 @@ Tables (full DDL deferred to actual migration; this is the shape):
 - `nfl_calendar (year PRIMARY KEY, payload JSONB)` — loaded once per season.
 - `venues (espn_id, name, city, state, is_indoor, surface, capacity, weather_lat, weather_lon)` — seeded from `app/data/venues.json` on startup.
 
-**Historical data domain** (backfilled from `nfl_data_py`,
-~Pigskin's CFBD historical tables analog — see Phase 3.5 for the
-load step):
+**Historical + weekly nflverse data domain** (backfilled and refreshed
+via `nflreadpy`, ~Pigskin's CFBD historical tables analog — see
+Phase 3.5 for the load step):
 
-- `games_historical (season, week, season_type, game_id, kickoff, home_team, away_team, home_score, away_score, …)` — `nfl_data_py.import_schedules()` rows.
-- `weekly_stats (season, week, player_id, team, …)` — `import_weekly_data()`.
-- `pbp_summary (season, week, game_id, team_offense, plays, epa_total, epa_pass, epa_rush, success_rate, pressure_rate, …)` — `import_pbp_data()` rolled up to team-game grain (the model doesn't need play-level rows).
-- `betting_lines (season, week, game_id, source, spread, total, moneyline_home, moneyline_away, …)`.
-- `injuries (season, week, team, player_id, status, primary_injury, report_status, …)`.
-- `snap_counts (season, week, game_id, player_id, offense_snaps, defense_snaps, st_snaps, …)`.
+- `games_historical (season, week, season_type, game_id, kickoff, home_team, away_team, home_score, away_score, …)` — `nflreadpy.load_schedules()` rows.
+- `weekly_stats (season, week, player_id, team, …)` — `load_player_stats()`.
+- `pbp_summary (season, week, game_id, team_offense, plays, epa_total, epa_pass, epa_rush, success_rate, pressure_rate, …)` — `load_pbp()` rolled up to team-game grain (the model doesn't need play-level rows for inference; keep the raw `pbp` per-play table for the current season only).
+- `betting_lines (season, week, game_id, source, spread, total, moneyline_home, moneyline_away, …)` — from `load_schedules()` (which includes closing lines).
+- `rosters_weekly (season, week, team, player_id, position, jersey, status, …)` — `load_rosters_weekly()`.
+- `depth_charts (season, week, team, position, depth_position, player_id, …)` — `load_depth_charts()`.
+- `injuries (season, week, team, player_id, status, primary_injury, report_status, …)` — `load_injuries()`.
+- `snap_counts (season, week, game_id, player_id, offense_snaps, defense_snaps, st_snaps, …)` — `load_snap_counts()`.
 
 Indexes are `(season, week)` and `(season, week, team)` everywhere
 that matters. These tables are append-only outside of the current
@@ -805,7 +869,7 @@ Headline's Phase 2 verbatim.
    PORT=8008
    # weather:
    OPEN_METEO_BASE_URL=https://api.open-meteo.com/v1
-   # nfl_data_py uses no API key; only network egress is the weekly pipeline
+   # nflreadpy uses no API key; only network egress is the weekly pipeline
    ```
 
    Note: **no RapidAPI variables.** Phase 0 + Phase 7 between them
@@ -840,20 +904,21 @@ Headline's Phase 2 verbatim.
    # expect: {"status":"ok"}
    ```
 
-### Phase 3.5 — Backfill historical tables
+### Phase 3.5 — Backfill historical tables (nflverse one-shot)
 
 The model and the in-season "Postgres-first" data flow both depend on
 having multi-season history loaded locally. This is the NFL equivalent
-of Pigskin's CFBD historical tables — done **once**, then maintained
-by small weekly upserts during the season.
+of Pigskin's CFBD historical tables — done **once** via a single
+nflverse pull, then maintained by the same weekly job during the
+season.
 
 #### First: scope what's actually rendered
 
-Before picking sources, audit what historical data the **current React
-app actually displays**. The backfill should serve the UI, not be
+Before running the backfill, audit what historical data the **current
+React app actually displays**. The backfill should serve the UI, not be
 exhaustive for its own sake. Walk the pages once and write a small
 inventory — this is a 30-minute task that prevents days of wasted
-backfill effort. Where to look:
+effort. Where to look:
 
 - `frontend/src/pages/Standings.jsx` + `useStandings` — multi-season
   standings? Or current season only?
@@ -869,66 +934,60 @@ backfill effort. Where to look:
   weeks?
 
 Anything that *only* renders current-season data doesn't need historical
-backfill — the weekly pipeline keeps it fresh. Anything that exposes
-season pickers, year params, or "all-time" widgets is in-scope for the
-backfill. **For the ML model's training data, the scope is independent
-of the UI: it needs full per-team-game EPA back to 2016ish regardless.**
+backfill — the weekly job keeps it fresh. Anything that exposes
+season pickers, year params, or "all-time" widgets is in-scope. **For
+the ML model's training data, the scope is independent of the UI: it
+needs full per-team-game EPA back to ~2016 regardless.**
 
-#### Source: pick the cleanest, free-est, fastest one
+#### Source: nflverse via `nflreadpy`, full stop
 
-The historical data exists in several places. Pick whichever is most
-complete and most convenient — the goal is one-shot before the
-season, not a recurring fetch.
+Single source of truth. `nflreadpy` (the maintained successor to
+`nfl_data_py`) downloads parquet files from the nflverse data
+releases. No API key, no rate limit, no paid-tier concern. Same data
+the existing `nfl_predictor` already consumes — adopting it means the
+ML port (Phase 7) doesn't need a separate data path.
 
-| Candidate | Pros | Cons |
-|---|---|---|
-| **Existing local backfill** (if you've already done this for `nfl_predictor`) | Free, instant. Just rsync + `\copy`. | Confirm schema matches the tables in Phase 1. |
-| **`nfl_data_py`** | Free, well-maintained, what `nfl_predictor` already consumes. PBP detail unmatched. | Multi-GB of PBP per season; takes a while to fetch + roll up. |
-| **RapidAPI `nfl-api-data` bulk pull** | You're still paying for it during the migration window — get one final value extraction before cancelling. Team-stats, team-record, venues, leaders endpoints have season-long history that's hard to get elsewhere. | Per-game/per-team rate-limited; needs a careful loop to not blow the daily quota. |
-| **ESPN public API directly** (or via the gateway with a `?historical=1` mode) | Free, the gateway already proxies it for live use. | ESPN's historical-stat coverage is uneven across seasons; some Core API endpoints rate-limit unfriendly hosts. |
+- **No RapidAPI bulk pull.** Earlier drafts proposed draining the
+  paid subscription on the way out — drop that plan. nflverse has the
+  same (richer) historical data for free, including per-game team
+  stats and player leaders derived from PBP that RapidAPI exposes only
+  per-season as monolithic blobs.
+- **ESPN gateway is not the historical source.** Gateway covers
+  current-day live state only; its DB rows aren't backfilled for prior
+  seasons. Don't try to pull "all seasons" through it.
+- **Existing local backfill from prior `nfl_predictor` work** — if
+  you have it on disk, dump + `\copy` is still the fastest start. The
+  nflverse pull is the source of truth going forward; existing local
+  rows just save the first download.
 
-**Recommended order**:
-
-1. If you already have backfill from `nfl_predictor` work — use it.
-   Rsync + `\copy` is 30 minutes total.
-2. Then **pull one full sweep from RapidAPI before cancelling**: every
-   team's standings + stats + leaders for every season we care about
-   (2018–2025), every venue, every game's boxscore + odds + scoring
-   plays. Park results in `api_archive` tables (or directly into the
-   target tables). This is the cheapest moment to do it — the subscription
-   is still active. Do not skip this step; once cancelled, this data
-   gets expensive to re-acquire.
-3. Fill any remaining gaps from `nfl_data_py` (especially PBP rollups
-   for the model — RapidAPI doesn't expose per-play EPA).
-
-The `scripts/backfill_history.py` script orchestrates all three
-sources, conflict-resolving by precedence (existing-local >
-nfl_data_py > RapidAPI for fields where coverage overlaps). Once
-populated, **the only network egress during a season is the weekly
-pipeline calling `nfl_data_py` for current-week deltas plus the ESPN
-gateway for current-day scoreboards.** No per-request fan-out to
-external APIs from user-facing endpoints.
+Once populated, **the only network egress during a season is the
+weekly nflverse refresh (Tuesdays) plus the ESPN gateway for
+current-day scoreboards and live in-game state.** No per-request
+fan-out to external APIs from user-facing endpoints.
 
 #### One-shot run
 
-If starting from scratch (no existing backfill):
-
 ```bash
 # from the new NFL backend directory on the MacBook:
-uv run python -m scripts.backfill_history --seasons 2016-2025 --target ssh://schnetzermini@Schnetzer-mini.local/nfl_prod
+uv run python -m scripts.refresh_nflverse --seasons 2016-2025 --target ssh://schnetzermini@Schnetzer-mini.local/nfl_prod --mode backfill
 ```
 
-The `scripts/backfill_history.py` script:
+The `scripts/refresh_nflverse.py` script (also used by the weekly
+launchd job in `--mode weekly`):
 
-1. For each season in range, call `nfl.import_schedules`,
-   `nfl.import_weekly_data`, `nfl.import_pbp_data`,
-   `nfl.import_injuries`, `nfl.import_snap_counts`, and the betting
-   lines helper from `nfl_predictor/scripts/build_features.py`.
-2. For PBP: roll up to team-game grain in pandas before inserting (one
-   row per team per game, not per play). Saves ~100× space and matches
-   what the feature builder actually consumes.
-3. `INSERT ... ON CONFLICT (season, week, ...) DO NOTHING` so re-runs
-   are safe.
+1. For each season in range, call `nflreadpy.load_schedules`,
+   `load_player_stats`, `load_pbp`, `load_rosters_weekly`,
+   `load_depth_charts`, `load_injuries`, `load_snap_counts`. (Plus
+   `load_team_stats` if it covers the season; otherwise derive from
+   PBP.)
+2. For PBP: roll up to team-game grain in pandas/polars before
+   inserting (one row per team per game, not per play). Saves ~100×
+   space and matches what the feature builder consumes. Keep the
+   raw per-play rows in a `pbp` table only for the seasons that
+   currently render in the UI (typically just the active season).
+3. `INSERT ... ON CONFLICT (season, week, ...) DO UPDATE` so re-runs
+   upsert rather than skip — the weekly job needs in-season rows to
+   refresh as games complete and stats settle.
 4. Print a summary table (rows per table, range coverage).
 
 Verify on the Mini:
@@ -948,8 +1007,8 @@ ssh schnetzermini@Schnetzer-mini.local '
 
 After backfill, the feature builder in `app/ml/features.py` is rewired
 to read from these Postgres tables (via SQLAlchemy) instead of calling
-`nfl_data_py` at request time. Live current-season deltas come from
-the weekly pipeline (Phase 7), which calls `nfl_data_py` once and
+`nflreadpy` at request time. Live current-season deltas come from
+the weekly pipeline (Phase 7), which calls `nflreadpy` once and
 upserts. Single point of network egress.
 
 ---
@@ -1171,7 +1230,7 @@ what's on the active code path:**
 |---|---|---|
 | `training/train.py` | `app/ml/train.py` | Production training entry point |
 | `training/score_and_publish.py` | `app/ml/inference.py` | Becomes a callable `predict_week(season, week, market_influence=0.3, injury_adjust=1.0) -> list[Prediction]`. Strip Upstash publishing — return values, route them via the FastAPI handler to Postgres. |
-| `scripts/build_features.py` + `build_feature_frame.py` | `app/ml/features.py` | Merge the two — there's no reason to keep them split inside our backend. Rewire data fetches to read from `nfl_prod` Postgres (the backfilled historical tables from Phase 3.5) instead of calling `nfl_data_py` at request time. |
+| `scripts/build_features.py` + `build_feature_frame.py` | `app/ml/features.py` | Merge the two — there's no reason to keep them split inside our backend. Rewire data fetches to read from `nfl_prod` Postgres (the nflverse-backfilled historical tables from Phase 3.5) instead of calling `nfl_data_py`/`nflreadpy` at request time. |
 | `scripts/data_sources.py` | `app/ml/data_sources.py` | `load_schedule`, `last_completed_week`, `upcoming_week`. Backed by Postgres too. |
 | `scripts/roster_features.py` | `app/ml/roster_features.py` | Injury burden + QB continuity health features. |
 | `scripts/best_bets.py` | `app/ml/best_bets.py` | Edge → Strong/Medium/Lean labels. |
@@ -1237,11 +1296,12 @@ expectations:
 `scripts/weekly_pipeline.py` (Pigskin's `scripts/weekly_pipeline.py` is
 the template). The pipeline is idempotent and file-state-gated:
 
-1. `ingest_results.py` — pull final scores + new injury/snap data via
-   `nfl_data_py` for the most recent completed week; upsert into
-   `games_historical`, `injuries`, `snap_counts`, `pbp_summary`,
-   `betting_lines`. This is the only live `nfl_data_py` fan-out — once
-   per day during season.
+1. `ingest_results.py` — invokes `scripts/refresh_nflverse.py
+   --mode weekly` to pull final scores + new roster/depth/injury/snap
+   data via `nflreadpy` for the most recent completed week; upserts
+   into `games_historical`, `rosters_weekly`, `depth_charts`,
+   `injuries`, `snap_counts`, `pbp_summary`, `betting_lines`. This is
+   the only live nflverse fan-out — once per day during season.
 2. `analyze_week_performance.py` — score model predictions against
    actuals (cover %, MAE on margin, log-loss on win-prob). Stored in a
    `prediction_performance` table for trend monitoring.
@@ -1352,9 +1412,10 @@ Run this when:
    Don't delete yet — keep paused for 7 days as a deletion-delay
    safety net, not as a runnable rollback target.
 6. **Pause the Upstash database** for 7 days, same reason.
-7. **Cancel the RapidAPI subscription.** Should already be done by end
-   of Phase 0 (bulk historical pull then cutoff). If not, do it now —
-   nothing in the new backend calls it.
+7. **Cancel the RapidAPI subscription.** Should already be done as
+   soon as the new backend shipped — there is no bulk historical pull
+   gate; nflverse covers history for free. If not yet cancelled, do
+   it now — nothing in the new backend calls it.
 8. **Day 8–14**: delete the Render services, delete the Upstash DB,
    tag and archive the source repos (`Webstorm/nfl/` and
    `Python/nfl_predictor/`).
@@ -1393,22 +1454,24 @@ The rollback strategy is **restore-from-backup on the Mini**, not
   build at the new host. No Render involvement.
 - After 7 days of stable operation: delete the Render services,
   delete the Upstash database, cancel the RapidAPI subscription (if
-  not already cancelled at the end of Phase 0). Archive both source
-  repos via `git tag pre-mini-cutover && git push --tags` and remove
-  local working trees.
+  not already cancelled when the new backend shipped). Archive both
+  source repos via `git tag pre-mini-cutover && git push --tags` and
+  remove local working trees.
 
 ---
 
 ## Risks & open questions
 
-- **ESPN gateway feature work is a precondition.** Phase 0 expands the
-  gateway with ~7 new REST endpoints (standings, team stats, team
-  leaders, roster, odds, scoring plays, event summary). These are
-  shallow wrappers around `ESPNClient` methods that already exist, but
-  this work has to land first or the NFL backend has nothing to call.
-  Don't underestimate: even shallow REST endpoints need pydantic
-  response models, tests, and gateway DB ingest decisions. Budget
-  ~3–5 days for the gateway side.
+- **ESPN gateway feature work shrank to two small patches** (events
+  `week` filter, standings `playoff_seed` column), plus optional
+  passthrough routes for live-only endpoints (boxscore / scoring
+  plays during a game / intraday odds). Everything else moves to
+  nflverse via `nflreadpy`. Budget the gateway side at ~1–2 days
+  total. The original "7 new gateway endpoints" plan was based on
+  unverified assumptions about `ESPNClient` method coverage; the
+  audit (2026-05-13) confirmed only 6 client methods ship today and
+  the cleaner replacement for the rest is nflverse, not building out
+  ESPN coverage.
 - **NFL pre-game predictor — resolved.** The existing
   `~/Documents/Development/Python/nfl_predictor/` ("Gridiron API")
   already supplies pre-game predictions and is the producer of the
@@ -1420,7 +1483,7 @@ The rollback strategy is **restore-from-backup on the Mini**, not
   `injuries`, `snap_counts`. Phase 3.5 has to run before predictions
   work on the new backend. If you already have a local backfill
   database from earlier `nfl_predictor` work, rsync + `\copy` is much
-  faster than re-fetching from `nfl_data_py`.
+  faster than re-fetching from `nflreadpy`.
 - **Visual fidelity is subjective and slow.** "Duplicate the UI
   exactly" is a multi-week side-by-side iteration job, not a
   one-pass port. Budget realistically. Consider an
@@ -1477,7 +1540,7 @@ A few opinions on this migration as drafted:
    tuning behind it (latest artifacts dated Dec 2025–Feb 2026). The
    Phase 7 work is *consolidation*, not modeling — fold it into
    `app/ml/`, point it at the local Postgres historical tables
-   instead of nfl_data_py-at-request-time, drop the standalone Render
+   instead of `nflreadpy`-at-request-time, drop the standalone Render
    service, and you're done. Two Render services collapse to zero.
    Same shape as the `cfbd` → Pigskin migration, which already
    succeeded.
