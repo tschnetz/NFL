@@ -12,6 +12,17 @@ nonisolated struct ScoreboardEvent: Decodable, Identifiable, Sendable {
     let shortName: String
     let status: ScoreboardStatus
     let competitions: [ScoreboardCompetition]
+    let season: SeasonInfo?
+    let week: WeekInfo?
+
+    nonisolated struct SeasonInfo: Decodable, Sendable {
+        let year: Int
+        let type: Int?
+    }
+
+    nonisolated struct WeekInfo: Decodable, Sendable {
+        let number: Int
+    }
 
     var competition: ScoreboardCompetition? { competitions.first }
     var home: ScoreboardCompetitor? {
@@ -19,6 +30,40 @@ nonisolated struct ScoreboardEvent: Decodable, Identifiable, Sendable {
     }
     var away: ScoreboardCompetitor? {
         competition?.competitors.first { $0.homeAway == "away" }
+    }
+
+    /// Build a ScheduleGame so the card can drill into GameDetailView with
+    /// the same model the rest of the app uses. Some fields (roof, surface,
+    /// stadium) aren't carried by the scoreboard payload — left nil.
+    func asScheduleGame() -> ScheduleGame? {
+        guard let homeAbbr = home?.team.abbreviation,
+              let awayAbbr = away?.team.abbreviation else { return nil }
+        let espnId = Int(id) ?? 0
+        let seasonYear = season?.year ?? 0
+        let weekNum = week?.number ?? 0
+        let seasonType: String = {
+            switch season?.type {
+            case 1: return "preseason"
+            case 3: return "postseason"
+            default: return "regular"
+            }
+        }()
+        return ScheduleGame(
+            gameId: "\(seasonYear)_\(String(format: "%02d", weekNum))_\(awayAbbr)_\(homeAbbr)",
+            season: seasonYear,
+            week: weekNum,
+            seasonType: seasonType,
+            kickoff: date,
+            homeTeam: homeAbbr,
+            awayTeam: awayAbbr,
+            homeScore: home?.scoreInt,
+            awayScore: away?.scoreInt,
+            overtime: nil,
+            stadium: competition?.venue?.fullName,
+            roof: nil,
+            surface: nil,
+            espnId: espnId
+        )
     }
 }
 
@@ -35,6 +80,11 @@ nonisolated struct ScoreboardStatus: Decodable, Sendable {
 
 nonisolated struct ScoreboardCompetition: Decodable, Sendable {
     let competitors: [ScoreboardCompetitor]
+    let venue: ScoreboardVenue?
+}
+
+nonisolated struct ScoreboardVenue: Decodable, Sendable {
+    let fullName: String?
 }
 
 nonisolated struct ScoreboardCompetitor: Decodable, Identifiable, Sendable {
@@ -111,7 +161,16 @@ struct ScoreboardView: View {
             ScrollView {
                 VStack(spacing: 10) {
                     ForEach(events) { event in
-                        ScoreboardCard(event: event)
+                        if let game = event.asScheduleGame() {
+                            NavigationLink {
+                                GameDetailView(game: game, prediction: nil)
+                            } label: {
+                                ScoreboardCard(event: event)
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            ScoreboardCard(event: event)
+                        }
                     }
                 }
                 .padding(16)
@@ -120,52 +179,40 @@ struct ScoreboardView: View {
     }
 }
 
+/// Visually mirrors `ResultsRow` from ResultsView so the Scoreboard and
+/// Results tabs feel like the same game-card surface. Differences:
+/// the status block uses live clock + period for in-progress games, and
+/// there's no inline model-pick badge (predictions are surfaced on
+/// drill-in via GameDetailView).
 private struct ScoreboardCard: View {
     let event: ScoreboardEvent
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                statusBadge
-                Spacer()
-                if event.status.type.state == "pre" {
-                    Text(event.date, format: .dateTime.weekday(.abbreviated).hour().minute())
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 6) {
+                    teamLine(competitor: event.away, isWinner: isWinner(event.away))
+                    teamLine(competitor: event.home, isWinner: isWinner(event.home))
                 }
-            }
-            VStack(spacing: 8) {
-                teamLine(competitor: event.away)
-                teamLine(competitor: event.home)
+                Spacer()
+                statusBlock
             }
         }
-        .padding(14)
-        .background(.background.secondary, in: .rect(cornerRadius: 14))
+        .padding(12)
+        .background(.background.secondary, in: .rect(cornerRadius: 12))
         .accessibilityElement(children: .combine)
     }
 
-    private func teamLine(competitor: ScoreboardCompetitor?) -> some View {
+    private func teamLine(competitor: ScoreboardCompetitor?, isWinner: Bool) -> some View {
         let abbr = competitor?.team.abbreviation ?? "—"
         let teamColor = TeamRepository.shared.team(abbr: abbr)?.primarySwiftUIColor
-        let isWinner: Bool = {
-            guard event.status.type.state == "post",
-                  let mine = competitor?.scoreInt else { return false }
-            let other = (competitor?.id == event.home?.id
-                         ? event.away : event.home)?.scoreInt
-            return other.map { mine > $0 } ?? false
-        }()
         return HStack(spacing: 10) {
-            TeamLogoView(abbr: abbr, size: 30, style: .helmet)
+            TeamLogoView(abbr: abbr, size: 26)
             Text(abbr)
                 .font(.headline)
-                .frame(width: 48, alignment: .leading)
+                .frame(width: 44, alignment: .leading)
                 .foregroundStyle(teamColor ?? .primary)
-            Text(competitor?.team.shortDisplayName
-                 ?? competitor?.team.displayName ?? "")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            Spacer()
+            Spacer(minLength: 0)
             Text(competitor?.scoreInt.map(String.init) ?? "—")
                 .font(.title3.weight(isWinner ? .bold : .regular))
                 .monospacedDigit()
@@ -173,33 +220,44 @@ private struct ScoreboardCard: View {
         }
     }
 
-    private var statusBadge: some View {
-        Text(badgeText)
-            .font(.caption.weight(.semibold))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(badgeColor.opacity(0.18), in: Capsule())
-            .foregroundStyle(badgeColor)
+    private func isWinner(_ competitor: ScoreboardCompetitor?) -> Bool {
+        guard event.status.type.state == "post",
+              let mine = competitor?.scoreInt else { return false }
+        let other = (competitor?.id == event.home?.id
+                     ? event.away : event.home)?.scoreInt
+        return other.map { mine > $0 } ?? false
     }
 
-    private var badgeText: String {
-        switch event.status.type.state {
-        case "in":
-            if let period = event.status.period,
-               let clock = event.status.displayClock {
-                return "Q\(period) · \(clock)"
+    private var statusBlock: some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            switch event.status.type.state {
+            case "post":
+                Text("Final")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            case "in":
+                if let period = event.status.period,
+                   let clock = event.status.displayClock {
+                    Text("Q\(period)")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.orange)
+                    Text(clock)
+                        .font(.caption2.weight(.medium))
+                        .monospacedDigit()
+                        .foregroundStyle(.orange)
+                } else {
+                    Text(event.status.type.description)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.orange)
+                }
+            default:
+                Text(event.date, style: .date)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                Text(event.date, style: .time)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
             }
-            return event.status.type.description
-        default:
-            return event.status.type.description
-        }
-    }
-
-    private var badgeColor: Color {
-        switch event.status.type.state {
-        case "in": .orange
-        case "post": .secondary
-        default: .blue
         }
     }
 }
