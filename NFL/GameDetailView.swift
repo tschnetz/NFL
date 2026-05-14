@@ -4,17 +4,89 @@ struct GameDetailView: View {
     let game: ScheduleGame
     let prediction: GamePrediction?
 
+    @State private var odds: LoadState<[OddsItem]> = .idle
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 hero
                 if let prediction { predictionSection(prediction) }
+                oddsSection
                 metaSection
             }
             .padding(16)
         }
         .navigationTitle("\(game.awayTeam) @ \(game.homeTeam)")
         .navigationBarTitleDisplayMode(.inline)
+        .task { await loadOdds() }
+    }
+
+    // MARK: - Odds
+
+    private func loadOdds() async {
+        guard case .idle = odds else { return }
+        odds = .loading
+        do {
+            let response: EventOddsResponse = try await APIClient.shared
+                .get("/api/event-odds/\(game.espnId)")
+            odds = .loaded(response.items)
+        } catch {
+            odds = .failed(error.localizedDescription)
+        }
+    }
+
+    @ViewBuilder
+    private var oddsSection: some View {
+        switch odds {
+        case .idle, .loading:
+            EmptyView()
+        case .failed:
+            EmptyView()
+        case .loaded(let items) where items.isEmpty:
+            EmptyView()
+        case .loaded(let items):
+            VStack(alignment: .leading, spacing: 12) {
+                sectionHeader("Live odds")
+                VStack(spacing: 0) {
+                    ForEach(items) { item in
+                        oddsRow(item)
+                        if item.id != items.last?.id {
+                            Divider()
+                        }
+                    }
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.background.secondary, in: .rect(cornerRadius: 14))
+        }
+    }
+
+    private func oddsRow(_ item: OddsItem) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.provider.name)
+                    .font(.subheadline.weight(.semibold))
+                if let details = item.details {
+                    Text(details)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            if let ou = item.overUnder {
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("O/U")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .textCase(.uppercase)
+                    Text(String(format: "%.1f", ou))
+                        .font(.callout.weight(.medium))
+                        .monospacedDigit()
+                }
+            }
+        }
+        .padding(.vertical, 8)
     }
 
     // MARK: - Hero
@@ -57,16 +129,19 @@ struct GameDetailView: View {
     }
 
     private func teamColumn(abbr: String, score: Int?, isWinner: Bool) -> some View {
-        VStack(spacing: 6) {
+        let teamColor = TeamRepository.shared.team(abbr: abbr)?.primarySwiftUIColor
+        return VStack(spacing: 6) {
             TeamLogoView(abbr: abbr, size: 56)
             Text(abbr)
                 .font(.title2.weight(.bold))
+                .foregroundStyle(teamColor ?? .primary)
             Text(score.map(String.init) ?? "—")
                 .font(.largeTitle.weight(.semibold))
                 .monospacedDigit()
                 .foregroundStyle(isWinner ? .primary : .secondary)
         }
         .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Prediction
