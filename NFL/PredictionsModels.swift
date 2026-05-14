@@ -92,3 +92,62 @@ extension GamePrediction {
         bestBetStrength.flatMap(Strength.init)
     }
 }
+
+// MARK: - Predictions weekly summary (from /api/preds/summary/...)
+
+nonisolated struct PredictionsSummary: Decodable, Sendable {
+    let season: Int
+    let week: Int
+    let seasonType: String?
+    let version: String?
+    let games: Int
+    let strength: [String: Int]
+    let spread: StrengthBucket
+    let total: TotalBucket
+    let topSpreads: [SummaryRow]
+    let topTotals: [SummaryRow]
+    let topBestBets: [SummaryRow]
+
+    func strengthCount(_ key: GamePrediction.Strength) -> Int {
+        strength[key.rawValue] ?? 0
+    }
+}
+
+nonisolated struct StrengthBucket: Decodable, Sendable {
+    let byStrength: [String: Int]
+}
+
+nonisolated struct TotalBucket: Decodable, Sendable {
+    let byStrength: [String: Int]
+    let overCount: Int
+    let underCount: Int
+}
+
+nonisolated struct SummaryRow: Decodable, Identifiable, Sendable {
+    let gameId: String?
+    let espnId: Int?
+    let homeTeam: String?
+    let awayTeam: String?
+    let pick: String?
+    let market: String?
+    let strength: String?
+    let edge: Double?
+    let predHomeMargin: Double?
+    let line: Double?
+
+    var id: String {
+        if let gameId { return gameId }
+        if let espnId { return String(espnId) }
+        return "\(homeTeam ?? "")_\(awayTeam ?? "")_\(pick ?? "")"
+    }
+
+    var strengthValue: GamePrediction.Strength? {
+        strength.flatMap(GamePrediction.Strength.init)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case gameId, homeTeam, awayTeam, pick, market, strength, edge,
+             predHomeMargin, line
+        case espnId = "id"
+    }
+}
