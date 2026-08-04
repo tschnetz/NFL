@@ -2,7 +2,7 @@
 
 > One-stop reference for the self-hosted services running on `schnetzermini@Schnetzer-mini.local`. Use this when bootstrapping a new project so you don't re-discover the same facts every time.
 >
-> **Last updated:** 2026-05-11 (after ESPN gateway ship)
+> **Last updated:** 2026-05-18 (after NFL deploy + PhotoAlbum prereqs)
 
 ## TL;DR
 
@@ -30,10 +30,12 @@
 | SportsBar backend | `sportsbar.schnetz.us` | `:8006` | FastAPI + asyncpg + APNs (httpx HTTP/2) | `sportsbar_prod` | `IntelliJ/Python/SportsBar` (client: `Swift/SportsBar`) — LISTENs on `espn_prod.event_changed`, fans out APNs silent pushes to wake the iOS widget |
 | Portfolio | `portfolio.schnetz.us` | `:3001` | Express (Node) + Redis | `portfolio` (+ `portfolio_local`) | `IntelliJ/React/portfolio` (backend) + `Swift/Portfolio` (clients) |
 | Pigskin | `pigskin.schnetz.us` | `:8007` | FastAPI + asyncpg + Redis | `pigskin_prod` (+ `pigskin_dev`) | backend: `IntelliJ/Python/Pigskin` · client: `Swift/Pigskin` — replaces legacy `Webstorm/cfb2025` + `Python/cfbd` (migration plan in `cfb2025/KICKOFF.md`) |
+| NFL | `nfl.schnetz.us` | `:8008` | FastAPI + asyncpg | `nfl_prod` (+ `nfl_dev`) | `Swift/NFL` (backend at `app/`, weekly scheduled job via `com.nfl.weekly.plist`) |
+| PhotoAlbum | `photoalbum.schnetz.us` | `:8009` | FastAPI + asyncpg + pgvector (planned) | `photoalbum_prod` | backend: `IntelliJ/Python/PhotoAlbums` — see `PHOTO_ALBUMS.md` (Phase 0 complete: DB created, pgvector 0.8.2 installed; backend skeleton TBD) |
 
 \* Verify Braves DB name on next deploy; not probed during this audit.
 
-**Next free port:** `:8008`. Stay in the 8000s for FastAPI services; `:3xxx` for Node.
+**Next free port:** `:8010`. Stay in the 8000s for FastAPI services; `:3xxx` for Node.
 
 ---
 
@@ -122,7 +124,7 @@ Iterates a `JOBS` list of `db_name:project_dir:retention_days` and:
 
 Drive + Storage mirrors are best-effort — macOS TCC blocks launchd-spawned bash from those locations unless `/bin/bash` (or this plist's `Label`) has Full Disk Access. Local copy always works.
 
-**Current JOBS list** (as of 2026-05-11):
+**Current JOBS list** (as of 2026-05-18):
 ```
 orbit_prod:.orbit:14
 portfolio:.portfolio:14
@@ -133,9 +135,10 @@ banktivity_archive:.finance-dashboard:14
 espn_prod:.espn:14
 sportsbar_prod:.sportsbar:14
 pigskin_prod:.pigskin:14
+nfl_prod:.nfl:14
 ```
 
-**`espn_prod` + `sportsbar_prod` added to the rotation 2026-05-11.** **`pigskin_prod` added 2026-05-12** (first dump verified). Current rotation lists 9 databases.
+**`espn_prod` + `sportsbar_prod` added to the rotation 2026-05-11.** **`pigskin_prod` added 2026-05-12** (first dump verified). **`nfl_prod` added with the NFL deploy.** Current rotation lists 10 databases. `photoalbum_prod` will join when its backend ships (see `PHOTO_ALBUMS.md` Phase 3).
 
 ### Adding a new project's database to the central backup
 
