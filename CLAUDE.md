@@ -17,9 +17,20 @@ iOS/macOS/iPadOS SwiftUI client for the personal NFL stack. Backend is deployed 
 
 ## Current state of this repo
 
-- `NFL/NFLApp.swift` + `NFL/ContentView.swift` are the xcodegen scaffold (~40 lines total). Nothing else has been written.
-- Backend is **fully ready to consume** — every endpoint listed in `BACKEND_API.md` works against `nfl.schnetz.us`.
-- Legacy React frontend at `~/Documents/Development/Webstorm/nfl/` is the visual + UX reference. Routes consumed there are 1:1 with what the backend now serves.
+⚠️⚠️ **This section asserted "Nothing else has been written" for 82 days while the client was being
+built.** Measured 2026-08-27: **34 Swift files, ~5,865 lines, five shipped tabs.** The claim also
+propagated — `MY_PORTFOLIO.md` carried "the SwiftUI client is still a scaffold" off the back of it,
+which is why a stale doc is worse than a missing one. Re-measure before trusting a state claim here.
+
+- **Five tabs** (`Views/Tabs/RootView.swift`, Pigskin pattern): Scoreboard · Schedule · Results ·
+  More · Picks. Picks has Active / History / Standings sub-pages.
+- **Structure** mirrors Pigskin: `API/APIClient.swift` (one actor), `Models/`, `Services/`,
+  `Views/{Tabs,Game,Team,Picks,Predictions,Standings,Settings,Onboarding,Components}`.
+- **Navigation uses closure-based `NavigationLink`s** — switched deliberately from the value-based
+  form in Teams and More; follow that when adding screens.
+- Backend is **fully ready to consume** — every endpoint in `BACKEND_API.md` works against
+  `nfl.schnetz.us`.
+- Legacy React frontend at `~/Documents/Development/Webstorm/nfl/` is the visual + UX reference.
 
 ## Pickers
 
