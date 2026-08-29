@@ -5,7 +5,7 @@ enum PickSide { case home, away }
 @MainActor
 @Observable
 final class PicksViewModel {
-    var season: Int = 2025
+    var season: Int = WeekSelection.currentSeason
     var week: Int = 1
 
     var state: LoadState<PicksState> = .idle
@@ -15,7 +15,7 @@ final class PicksViewModel {
     var actionError: String?
     var isMutating: Bool = false
 
-    let availableSeasons: [Int] = [2025, 2024, 2023, 2022]
+    let availableSeasons: [Int] = Array((2022...WeekSelection.latestSelectableSeason).reversed())
     let availableWeeks: [Int] = Array(1...18)
 
     private let client: APIClient

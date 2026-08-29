@@ -9,7 +9,7 @@ final class PicksStandingsViewModel {
     }
     var state: LoadState<PicksSeasonStandings> = .idle
 
-    let availableSeasons: [Int] = Array((2020...WeekSelection.defaultYear).reversed())
+    let availableSeasons: [Int] = Array((2020...WeekSelection.latestSelectableSeason).reversed())
 
     private let client: APIClient
 

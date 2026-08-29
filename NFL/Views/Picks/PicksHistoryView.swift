@@ -17,7 +17,7 @@ final class PicksHistoryViewModel {
     var schedule: LoadState<[ScheduleGame]> = .idle
     var history: LoadState<[PicksHistoryItem]> = .idle
 
-    let availableSeasons: [Int] = Array((1999...WeekSelection.defaultYear).reversed())
+    let availableSeasons: [Int] = Array((1999...WeekSelection.latestSelectableSeason).reversed())
     let availableWeeks: [Int] = Array(1...18)
 
     private let client: APIClient

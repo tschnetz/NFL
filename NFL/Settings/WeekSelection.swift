@@ -17,7 +17,7 @@ final class WeekSelection {
     let availableSeasons: [Int]
     let availableWeeks: [Int]
 
-    init(year: Int = WeekSelection.defaultYear,
+    init(year: Int = WeekSelection.currentSeason,
          seasonType: String = "regular",
          week: Int = 1) {
         self.year = year
@@ -25,7 +25,7 @@ final class WeekSelection {
         self.week = week
         /// 1999 is nflverse's earliest fully-covered season; the backend
         /// `predictions` table accepts seasons 1999–2100.
-        self.availableSeasons = Array((1999...WeekSelection.defaultYear).reversed())
+        self.availableSeasons = Array((1999...WeekSelection.latestSelectableSeason).reversed())
         self.availableWeeks = Array(1...18)
     }
 
@@ -42,6 +42,13 @@ final class WeekSelection {
         // the one that ended this past Feb.
         return month < 9 ? year - 1 : year
     }
+
+    /// The newest season a picker may offer. The backend publishes the
+    /// schedule and model predictions for a season months before kickoff
+    /// (2026 week 1 preds were served on 2026-08-29, 11 days out), so the
+    /// ceiling is the *current* season, never the last completed one —
+    /// capping at `defaultYear` made the whole upcoming season unreachable.
+    nonisolated static var latestSelectableSeason: Int { currentSeason }
 
     /// The current / upcoming NFL season. In May 2026 returns 2026 (the
     /// season that kicks off Sept 2026). Used by the forward-looking

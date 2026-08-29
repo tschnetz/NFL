@@ -18,7 +18,7 @@ final class ResultsViewModel {
     var predictions: LoadState<[Int: GamePrediction]> = .idle
 
     /// 1999 is nflverse's earliest fully-covered season.
-    let availableSeasons: [Int] = Array((1999...WeekSelection.defaultYear).reversed())
+    let availableSeasons: [Int] = Array((1999...WeekSelection.latestSelectableSeason).reversed())
     let availableWeeks: [Int] = Array(1...18)
 
     private let client: APIClient
