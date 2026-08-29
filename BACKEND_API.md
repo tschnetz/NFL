@@ -1,8 +1,8 @@
 # NFL backend — API contract for the SwiftUI client
 
-The Python/FastAPI backend is **deployed and live** at `https://nfl.schnetz.us` (Mac Mini, Cloudflare Tunnel, port 8008 on loopback). Backend repo: `~/Documents/Development/IntelliJ/Python/NFL/`. Phases 1–9 of `MIGRATE_MINI.md` are complete, including the full Phase 7 ML pipeline. **No frontend work has shipped yet** — the SwiftUI app under `NFL/` is the scaffold from `xcodegen`.
+The Python/FastAPI backend is **deployed and live** at `https://nfl.schnetz.us` (Mac Mini, Cloudflare Tunnel, port 8008 on loopback). Backend repo: `~/Documents/Development/IntelliJ/Python/NFL/`. The migration is done end to end — see `docs/archive/MIGRATE_MINI.md`, including the full Phase 7 ML pipeline.
 
-This doc is the contract the SwiftUI client should code against. When in doubt, hit the URL with curl — every endpoint serves real data today.
+The SwiftUI client is **shipped and consuming this API**: five tabs (Scoreboard · Schedule · Results · More · Picks), with Teams / Standings / Predictions under More. This doc is the wire contract both sides code against. When in doubt, hit the URL with curl — every endpoint serves real data today.
 
 ## Base config
 
@@ -33,12 +33,16 @@ All read endpoints are cached server-side via the Postgres `api_cache` table (no
 | GET | `/api/scoreboard/year/{year}` | All scoreboards for a season |
 | GET | `/api/schedule/{season}` | Full-season schedule from nflverse `games_historical` |
 | GET | `/api/schedule/team/{ABBR}` | One team's full season |
-| GET | `/api/standings` | League standings |
+| GET | `/api/standings` | League standings (flat). `?season=` + `?seasonType=`; defaults to the current season |
+| GET | `/api/standings/divisional` | Same data grouped AFC/NFC → division. What `StandingsView` renders |
 | GET | `/api/standings/{ABBR}` | Single team's record |
 | GET | `/api/team` | All teams (32 rows) |
 | GET | `/api/team/abbr/{ABBR}` | Team by 2-3 letter abbreviation |
 | GET | `/api/team/espn/{espn_id}` | Team by ESPN integer id |
 | GET | `/api/team/{ABBR}/roster` | Active roster from `rosters_weekly` |
+| GET | `/api/team-stats/{season}/{ABBR}` | `team_records` + `team_season_stats` JSONB for one team |
+| GET | `/api/team-stats/{season}/{ABBR}/leaders` | Statistical leaders for that team-season |
+| GET | `/api/team-stats/{ABBR}` | Same as above for the current season |
 | GET | `/api/calendar/{year}` | Week boundaries (start/end dates per week #) |
 
 ### Per-game detail screen
@@ -58,6 +62,9 @@ All read endpoints are cached server-side via the Postgres `api_cache` table (no
 |---|---|---|
 | GET | `/api/preds/{season}/{week}` | Per-game ML predictions for a week |
 | GET | `/api/preds/{season}/{week}/v{ver}` | Versioned variant (same shape) |
+| GET | `/api/preds/summary/{season}/{week}` | Week-level aggregate: `games`, `strength` histogram, `spread`/`total` breakdowns, `topSpreads`, `topTotals`, `bestBets`. What `PredictionsView` renders |
+
+⚠️ `{week}` on every `/api/preds/*` route is a **string** matched against `_WEEK_PATTERN` — it accepts both `w1` and `1` (`app/routers/predictions.py:50`). The client sends the legacy `w`-prefixed form.
 | POST | `/api/admin/retrain-and-cache` | Kicks a full retrain (~50s sync). Returns trained_through + validation metrics. Optional query params: `tune_margin`, `start_season`, `end_season`, `through_week` |
 
 Top-level shape:
@@ -147,28 +154,21 @@ Picks state machine and scoring are ported verbatim from the legacy Express back
 
 ```
 Swift/NFL/
-  NFL.xcodeproj/        # Xcode project
+  NFL.xcodeproj/
   NFL/
-    NFLApp.swift        # 17 lines — App entrypoint
-    ContentView.swift   # 24 lines — placeholder
-    Assets.xcassets/
-  Docs/
-    SwiftUI Visual Design & Polish — 2026.md      # design system reference
-    Tom's Best Practices — SwiftUI, ... 2026.md   # style conventions
-    ESPN_SERVICE.md                               # backend dep
-    MINI_ENV.md                                   # infra reference
-  MIGRATE_MINI.md       # the master migration plan (1585 lines); read this first
+    API/APIClient.swift          # the one actor; every call goes through it
+    Models/                      # Codable wire shapes
+    Services/                    # OfflinePicksQueue, TeamRepository
+    Settings/                    # AppSettings, WeekSelection
+    Views/{Tabs,Game,Team,Picks,Predictions,Standings,Settings,Onboarding,Components}
+  BACKEND_API.md                 # this file — the wire contract
+  CLAUDE.md                      # architecture + conventions
+  docs/archive/                  # MIGRATE_MINI.md, NEXT.md, ESPN_SERVICE.md
 ```
 
-The Mini infrastructure doc lives at `Docs/MINI_ENV.md` — it covers the deployment topology, Postgres, Cloudflare Tunnel, launchd. You don't need it for client work, but it explains why the API is at `nfl.schnetz.us` instead of a Render URL.
+The Mini infrastructure doc lives in the Guides folder at `~/Documents/Development/Guides/MINI_ENV.md` — deployment topology, Postgres, Cloudflare Tunnel, launchd. You don't need it for client work, but it explains why the API is at `nfl.schnetz.us` instead of a Render URL.
 
-## Recommended first steps for the SwiftUI port
-
-1. **Generate a Codable layer from the wire shapes above.** Start with `Predictions` + `Game` + `PickRow`; everything else is shallow.
-2. **Single `APIClient` actor** for all requests. Hold a `URLSession` + base URL + optional bearer token. Use `async/await`, no Combine.
-3. **Mirror the React app's screens.** Legacy frontend lived at `~/Documents/Development/Webstorm/nfl/`; the routes consumed are identical (just different protocol — REST instead of Express → Render). Read `App.jsx` + a couple of page components there to see what data each screen pulls.
-4. **Predictions card first** — it's the highest-value screen and exercises the full calibration payload. Render the `best_bet_strength` badge, `pred_home_margin` ± `sigma_post`, and the `pred_cover_prob_cal` as a percentage. Defer charts/CIs.
-5. **Cache via SwiftData or `URLCache`** — the backend's cache headers are minimal; client-side keep responses fresh for ~5 min during gameday.
+⚠️ **Season boundaries are a client-side trap.** The backend publishes a season's schedule and predictions months before kickoff — 2026 week 1 preds served on 2026-08-29, 11 days out. Any season picker must be capped at `WeekSelection.currentSeason`, never at the last *completed* season, or the whole upcoming season is unreachable in the UI.
 
 ## When the backend needs to change
 

@@ -1,5 +1,13 @@
 # Migrate NFL from Render + Upstash + RapidAPI to Mac Mini
 
+> **Status: ✅ complete — archived 2026-08-29.**
+> Phases 0–9 all landed. NFL runs on the mini as service #10: FastAPI on
+> `:8008`, `nfl_prod` in Postgres, public at `https://nfl.schnetz.us` via
+> Cloudflare Tunnel, weekly refresh under `com.nfl.weekly.plist`, registered
+> in both backup jobs. Render, Upstash and the RapidAPI dependency are gone.
+> Live infra facts are canonical in `~/Documents/Development/Guides/MINI_ENV.md`
+> (NFL row); this doc is kept for the *why*, not as a current reference.
+
 Plan for moving the NFL app off the Render-hosted React/Express stack and onto
 the Mac mini that already runs Orbit, Braves, Headline, Hearth, WorldCup, ESPN
 gateway, SportsBar, Portfolio, and Pigskin. The React UI (which the user
@@ -26,8 +34,8 @@ This doc mirrors the pattern in:
 
 - `~/Documents/Development/Swift/Headline/MIGRATE_MINI.md` — Supabase → Mini cutover
 - `~/Documents/Development/IntelliJ/Python/Pigskin/CLAUDE.md` — the cleanest reference for FastAPI + Postgres + ESPN-gateway + Swift on the Mini
-- `~/Documents/Development/Swift/NFL/Docs/MINI_ENV.md` — shared Mini infrastructure reference (Postgres, launchd, Cloudflare Tunnel, deploy pattern)
-- `~/Documents/Development/Swift/NFL/Docs/ESPN_SERVICE.md` — what the local ESPN gateway provides
+- `~/Documents/Development/Guides/MINI_ENV.md` — shared Mini infrastructure reference (Postgres, launchd, Cloudflare Tunnel, deploy pattern)
+- `docs/archive/ESPN_SERVICE.md` — what the local ESPN gateway provides
 
 Pigskin (CFB) is the closest analog: same Mini, same two-author "picks"
 feature, same flavor of ML predictions, same SwiftUI patterns. **Copy
@@ -221,7 +229,7 @@ free API. Keep as-is.)
 ## Target machine reality
 
 The Mini (`schnetzermini@Schnetzer-mini.local`, static `192.168.7.200`) is
-fully provisioned. From `Docs/MINI_ENV.md` (last updated 2026-05-11):
+fully provisioned. From `~/Documents/Development/Guides/MINI_ENV.md` (as of 2026-05-11):
 
 - [x] **PostgreSQL 18** via Homebrew, launchd-managed, trust auth for
       `schnetzermini` user. NFL gets a separate `nfl_prod` database on
@@ -268,7 +276,7 @@ add a client. Don't bother on day one.
 
 ## Port and hostname layout
 
-Per `Docs/MINI_ENV.md`, **next free port is `:8008`**. Apps in the 8000s
+Per `~/Documents/Development/Guides/MINI_ENV.md`, **next free port is `:8008`**. Apps in the 8000s
 are FastAPI; Node services use `:3xxx`.
 
 | Service | Local port | Public URL |
@@ -808,10 +816,11 @@ this means:
    over a stack of routes. SwiftUI `TabView` with custom tab-bar
    styling gets the same effect with way less plumbing — use it.
 
-The "SwiftUI Visual Design & Polish — 2026.md" file in this `Docs/`
-folder is the reference for any per-platform polish decisions; the
-"Best Practices — SwiftUI ... 2026 Edition.md" covers the architectural
-ones (state, navigation, environment, MVVM placement). Re-read both
+`~/Documents/Development/Guides/SwiftUI Best Practices & Visual
+Design — 2026.md` is the reference for per-platform polish decisions and
+the architectural ones alike (state, navigation, environment, MVVM
+placement) — the two separate docs this repo once carried were merged
+upstream into that single file. Re-read it
 before starting `ContentView.swift`.
 
 ### React UI → SwiftUI mapping (per page)
@@ -1373,7 +1382,7 @@ ssh schnetzermini@Schnetzer-mini.local '
 '
 ```
 
-Update `Docs/MINI_ENV.md` afterwards: add the NFL row to the services
+Update `~/Documents/Development/Guides/MINI_ENV.md` afterwards: add the NFL row to the services
 table, bump the JOBS list, increment "Current rotation lists 10
 databases."
 

@@ -1,5 +1,15 @@
 # NEXT — Predictions / Standings / Teams / Results expansion
 
+> **Status: ✅ complete — archived 2026-08-29.**
+> Every slice shipped, verified against the code and the live backend:
+> B1 (`app/routers/team_stats.py`, `/api/standings/divisional`,
+> `/api/preds/summary/{season}/{week}`) · F1 (`TabView` + `.sidebarAdaptable`,
+> `WeekSelection`, `AppSettings`) · F2 `Views/Predictions/` ·
+> F3 `Views/Standings/` · F4 `Views/Team/` — including the Leaders endpoint
+> this doc deferred · F5 shipped as a standalone `ResultsView` tab (the open
+> question in F5 resolved that way). The deferred iCloud-KVS layer also landed,
+> behind `kICloudKVSEnabled` in `AppSettings.swift`.
+
 After the React parity audit (2026-05-16), four legacy routes are still missing from
 the SwiftUI client:
 

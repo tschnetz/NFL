@@ -4,10 +4,9 @@ iOS/macOS/iPadOS SwiftUI client for the personal NFL stack. Backend is deployed 
 
 ## Read first
 
-- **`BACKEND_API.md`** (in this repo) — the API contract: every endpoint, every payload field, sign conventions, recommended Codable shapes, first-steps plan. Start here.
-- **`MIGRATE_MINI.md`** (in this repo) — the master plan for the whole migration. The backend phases are done; the frontend section is what we're starting now.
-- **`Docs/SwiftUI Visual Design & Polish — 2026.md`** — the design system to follow.
-- **`Docs/Tom's Best Practices — SwiftUI, iOS, iPadOS, macOS & Widgets (2026 Edition).md`** — coding conventions for this codebase.
+- **`BACKEND_API.md`** (in this repo) — the API contract: every endpoint, every payload field, sign conventions, Codable shapes. Start here.
+- **`~/Documents/Development/Guides/SwiftUI Best Practices & Visual Design — 2026.md`** — the design system *and* the coding conventions. ⚠️ This repo used to carry its own `Docs/` copies of two separate docs; they were deleted 2026-08-29 and the upstream pair has since been merged into that one file. Don't re-add local copies — they drift.
+- **`docs/archive/`** — finished plans, kept for the *why*, not as current reference: `MIGRATE_MINI.md` (the Render→mini migration, ✅ complete), `NEXT.md` (the Predictions/Standings/Teams/Results expansion, ✅ complete), `ESPN_SERVICE.md`.
 
 ## Where the backend lives
 
@@ -20,7 +19,8 @@ iOS/macOS/iPadOS SwiftUI client for the personal NFL stack. Backend is deployed 
 ⚠️⚠️ **This section asserted "Nothing else has been written" for 82 days while the client was being
 built.** Measured 2026-08-27: **34 Swift files, ~5,865 lines, five shipped tabs.** The claim also
 propagated — `MY_PORTFOLIO.md` carried "the SwiftUI client is still a scaffold" off the back of it,
-which is why a stale doc is worse than a missing one. Re-measure before trusting a state claim here.
+and `BACKEND_API.md` carried its own copy ("no frontend work has shipped yet") until 2026-08-29.
+That is why a stale doc is worse than a missing one. Re-measure before trusting a state claim here.
 
 - **Five tabs** (`Views/Tabs/RootView.swift`, Pigskin pattern): Scoreboard · Schedule · Results ·
   More · Picks. Picks has Active / History / Standings sub-pages.
@@ -32,6 +32,18 @@ which is why a stale doc is worse than a missing one. Re-measure before trusting
   `nfl.schnetz.us`.
 - Legacy React frontend at `~/Documents/Development/Webstorm/nfl/` is the visual + UX reference.
 
+## Season boundaries
+
+⚠️ **Cap every season picker at `WeekSelection.currentSeason`, never at the last *completed*
+season.** The backend publishes a season's schedule and predictions months ahead of kickoff, so
+"most recently completed season" as a picker ceiling silently hides the upcoming one — measured
+2026-08-29: `/api/preds/2026/w1` served 16 games while the app offered 2025 as its newest choice
+and defaulted Predictions to it, so 2026 was unreachable from any screen. `WeekSelection` now
+exposes `latestSelectableSeason` (= `currentSeason`) for ceilings; `defaultYear` (last completed
+season) stays the *default* only for backward-looking views (Results, Picks History).
+⚠️ The failure renders as an empty/wrong-year screen, not an error — it reads as "the data isn't
+there yet" when the data is fine.
+
 ## Pickers
 
 Two pickers forever: **Jim** and **Tom**. No rooms, no Socket.IO. Pick state is polled (5–15s) from the picks endpoints.
@@ -40,5 +52,5 @@ Two pickers forever: **Jim** and **Tom**. No rooms, no Socket.IO. Pick state is 
 
 - SwiftUI + async/await. No Combine, no UIKit unless absolutely needed.
 - One `APIClient` actor for all backend calls. Decode at the boundary.
-- Read `Docs/Tom's Best Practices...` for the style guide before introducing new patterns.
+- Read `~/Documents/Development/Guides/SwiftUI Best Practices & Visual Design — 2026.md` for the style guide before introducing new patterns.
 - Defer state management framework decisions until a real screen needs it. Default to `@Observable` + plain types.
