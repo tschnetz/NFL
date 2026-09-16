@@ -19,7 +19,7 @@ final class WeekSelection {
 
     init(year: Int = WeekSelection.currentSeason,
          seasonType: String = "regular",
-         week: Int = 1) {
+         week: Int = WeekSelection.currentWeek(for: WeekSelection.currentSeason)) {
         self.year = year
         self.seasonType = seasonType
         self.week = week
@@ -53,13 +53,39 @@ final class WeekSelection {
     /// The current / upcoming NFL season. In May 2026 returns 2026 (the
     /// season that kicks off Sept 2026). Used by the forward-looking
     /// Schedule + Scoreboard tabs which don't browse past seasons.
-    nonisolated static var currentSeason: Int {
+    nonisolated static var currentSeason: Int { currentSeason(on: Date()) }
+
+    nonisolated static func currentSeason(on date: Date) -> Int {
         let cal = Calendar(identifier: .gregorian)
-        let now = Date()
-        let year = cal.component(.year, from: now)
-        let month = cal.component(.month, from: now)
+        let year = cal.component(.year, from: date)
+        let month = cal.component(.month, from: date)
         // Jan / Feb: postseason of the prior labeled season; otherwise
         // the calendar year is the season label.
         return month < 3 ? year - 1 : year
+    }
+
+    /// The regular-season week `date` falls in for `season`, so week-scoped
+    /// screens open on the week that matters instead of week 1. Week 1
+    /// opens the Tuesday after Labor Day (kickoff is that Thursday) and
+    /// every week rolls over on Tuesday, after Monday night — so on the
+    /// Tuesday and Wednesday before a slate this already names the
+    /// *upcoming* week, which is what Predictions and Picks want.
+    /// Before kickoff → 1; past week 18 → 18; any other season → 1.
+    /// ⚠️ Until 2026-09-16 every screen defaulted to week 1 all season.
+    nonisolated static func currentWeek(for season: Int, on date: Date = Date()) -> Int {
+        guard season == currentSeason(on: date) else { return 1 }
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "America/New_York") ?? .current
+        guard let sept1 = cal.date(from: DateComponents(year: season, month: 9, day: 1)) else {
+            return 1
+        }
+        // Labor Day = first Monday of September (weekday 2).
+        let daysToMonday = (2 - cal.component(.weekday, from: sept1) + 7) % 7
+        guard let laborDay = cal.date(byAdding: .day, value: daysToMonday, to: sept1),
+              let week1Tuesday = cal.date(byAdding: .day, value: 1, to: laborDay),
+              let days = cal.dateComponents([.day], from: week1Tuesday, to: date).day
+        else { return 1 }
+        if days < 0 { return 1 }
+        return min(18, days / 7 + 1)
     }
 }

@@ -23,7 +23,9 @@ final class ResultsViewModel {
 
     private let client: APIClient
 
-    init(season: Int = WeekSelection.defaultYear, week: Int = 1, client: APIClient = .shared) {
+    init(season: Int = WeekSelection.defaultYear,
+         week: Int = WeekSelection.currentWeek(for: WeekSelection.defaultYear),
+         client: APIClient = .shared) {
         self.season = season
         self.week = week
         self.client = client
@@ -84,7 +86,9 @@ struct ResultsView: View {
                 .navigationTitle("Results")
                 .navigationSubtitle("\(String(model.season)) · Week \(model.week)")
                 .toolbar {
-                    ToolbarItem(placement: .primaryAction) { seasonWeekMenu }
+                    SeasonWeekToolbar(season: $model.season, week: $model.week,
+                                      seasons: model.availableSeasons,
+                                      weeks: model.availableWeeks)
                 }
                 .task {
                     await model.reload()
@@ -94,48 +98,6 @@ struct ResultsView: View {
                     }
                 }
                 .refreshable { await model.reload() }
-        }
-    }
-
-    /// Single menu with both Season and Week, mirroring the PicksView
-    /// toolbar pattern. Surfaces the current selection in the label so
-    /// the menu still works on Mac and iPad sidebar layouts where the
-    /// chip row may not be visible.
-    private var seasonWeekMenu: some View {
-        Menu {
-            Section("Season") {
-                ForEach(model.availableSeasons, id: \.self) { season in
-                    Button {
-                        model.season = season
-                    } label: {
-                        if model.season == season {
-                            Label(String(season), systemImage: "checkmark")
-                        } else {
-                            Text(String(season))
-                        }
-                    }
-                }
-            }
-            Section("Week") {
-                ForEach(model.availableWeeks, id: \.self) { week in
-                    Button {
-                        model.week = week
-                    } label: {
-                        if model.week == week {
-                            Label("Week \(week)", systemImage: "checkmark")
-                        } else {
-                            Text("Week \(week)")
-                        }
-                    }
-                }
-            }
-        } label: {
-            HStack(spacing: 4) {
-                Text("\(String(model.season)) · W\(model.week)")
-                Image(systemName: "chevron.down")
-                    .font(.caption2.weight(.semibold))
-            }
-            .font(.subheadline.weight(.medium))
         }
     }
 

@@ -6,7 +6,7 @@ enum PickSide { case home, away }
 @Observable
 final class PicksViewModel {
     var season: Int = WeekSelection.currentSeason
-    var week: Int = 1
+    var week: Int = WeekSelection.currentWeek(for: WeekSelection.currentSeason)
 
     var state: LoadState<PicksState> = .idle
     var schedule: LoadState<[ScheduleGame]> = .idle
@@ -440,39 +440,14 @@ struct PicksActiveView: View {
                 .accessibilityLabel("\(offlineQueue.count) pending picks")
             }
         }
-        ToolbarItem(placement: .primaryAction) {
-            Menu {
-                Section("Season") {
-                    ForEach(model.availableSeasons, id: \.self) { s in
-                        Button {
-                            model.season = s
-                            Task { await model.onWeekOrSeasonChange() }
-                        } label: {
-                            if s == model.season { Label(String(s), systemImage: "checkmark") }
-                            else { Text(String(s)) }
-                        }
-                    }
-                }
-                Section("Week") {
-                    ForEach(model.availableWeeks, id: \.self) { w in
-                        Button {
-                            model.week = w
-                            Task { await model.onWeekOrSeasonChange() }
-                        } label: {
-                            if w == model.week { Label("Week \(w)", systemImage: "checkmark") }
-                            else { Text("Week \(w)") }
-                        }
-                    }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Text("\(String(model.season)) · W\(model.week)")
-                    Image(systemName: "chevron.down")
-                        .font(.caption2.weight(.semibold))
-                }
-                .font(.subheadline.weight(.medium))
-            }
-        }
+        // Setting via the model's plain properties does not reload; the
+        // bindings route through onWeekOrSeasonChange like the old buttons did.
+        SeasonWeekToolbar(
+            season: Binding(get: { model.season },
+                            set: { model.season = $0; Task { await model.onWeekOrSeasonChange() } }),
+            week: Binding(get: { model.week },
+                          set: { model.week = $0; Task { await model.onWeekOrSeasonChange() } }),
+            seasons: model.availableSeasons, weeks: model.availableWeeks)
     }
 
     @ViewBuilder

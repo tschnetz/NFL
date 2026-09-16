@@ -28,10 +28,15 @@ struct PredictionsView: View {
     @State private var model = PredictionsViewModel()
 
     var body: some View {
+        @Bindable var selection = selection
         NavigationStack {
             content
                 .navigationTitle("Predictions")
-                .toolbar { toolbarContent }
+                .toolbar {
+                    SeasonWeekToolbar(season: $selection.year, week: $selection.week,
+                                      seasons: selection.availableSeasons,
+                                      weeks: selection.availableWeeks)
+                }
                 .task(id: pivotKey) {
                     await model.load(season: selection.year, week: selection.week)
                 }
@@ -42,47 +47,6 @@ struct PredictionsView: View {
     }
 
     private var pivotKey: String { "\(selection.year)-\(selection.week)" }
-
-    @ToolbarContentBuilder
-    private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .primaryAction) {
-            Menu {
-                Section("Season") {
-                    ForEach(selection.availableSeasons, id: \.self) { s in
-                        Button {
-                            selection.year = s
-                        } label: {
-                            if s == selection.year {
-                                Label(String(s), systemImage: "checkmark")
-                            } else {
-                                Text(String(s))
-                            }
-                        }
-                    }
-                }
-                Section("Week") {
-                    ForEach(selection.availableWeeks, id: \.self) { w in
-                        Button {
-                            selection.week = w
-                        } label: {
-                            if w == selection.week {
-                                Label("Week \(w)", systemImage: "checkmark")
-                            } else {
-                                Text("Week \(w)")
-                            }
-                        }
-                    }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Text("\(String(selection.year)) · W\(selection.week)")
-                    Image(systemName: "chevron.down")
-                        .font(.caption2.weight(.semibold))
-                }
-                .font(.subheadline.weight(.medium))
-            }
-        }
-    }
 
     @ViewBuilder
     private var content: some View {

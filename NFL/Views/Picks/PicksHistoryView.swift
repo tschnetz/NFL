@@ -22,7 +22,9 @@ final class PicksHistoryViewModel {
 
     private let client: APIClient
 
-    init(season: Int = WeekSelection.defaultYear, week: Int = 1, client: APIClient = .shared) {
+    init(season: Int = WeekSelection.defaultYear,
+         week: Int = WeekSelection.currentWeek(for: WeekSelection.defaultYear),
+         client: APIClient = .shared) {
         self.season = season
         self.week = week
         self.client = client
@@ -136,37 +138,8 @@ struct PicksHistoryView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .primaryAction) {
-            Menu {
-                Section("Season") {
-                    ForEach(model.availableSeasons, id: \.self) { s in
-                        Button {
-                            model.season = s
-                        } label: {
-                            if s == model.season { Label(String(s), systemImage: "checkmark") }
-                            else { Text(String(s)) }
-                        }
-                    }
-                }
-                Section("Week") {
-                    ForEach(model.availableWeeks, id: \.self) { w in
-                        Button {
-                            model.week = w
-                        } label: {
-                            if w == model.week { Label("Week \(w)", systemImage: "checkmark") }
-                            else { Text("Week \(w)") }
-                        }
-                    }
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Text("\(String(model.season)) · W\(model.week)")
-                    Image(systemName: "chevron.down")
-                        .font(.caption2.weight(.semibold))
-                }
-                .font(.subheadline.weight(.medium))
-            }
-        }
+        SeasonWeekToolbar(season: $model.season, week: $model.week,
+                          seasons: model.availableSeasons, weeks: model.availableWeeks)
     }
 
     @ViewBuilder
