@@ -65,7 +65,9 @@ All read endpoints are cached server-side via the Postgres `api_cache` table (no
 | GET | `/api/preds/summary/{season}/{week}` | Week-level aggregate: `games`, `strength` histogram, `spread`/`total` breakdowns, `topSpreads`, `topTotals`, `bestBets`. What `PredictionsView` renders |
 
 ⚠️ `{week}` on every `/api/preds/*` route is a **string** matched against `_WEEK_PATTERN` — it accepts both `w1` and `1` (`app/routers/predictions.py:50`). The client sends the legacy `w`-prefixed form.
-| POST | `/api/admin/retrain-and-cache` | Kicks a full retrain (~50s sync). Returns trained_through + validation metrics. Optional query params: `tune_margin`, `start_season`, `end_season`, `through_week` |
+| POST | `/api/admin/retrain-and-cache` | Kicks a full retrain (~30s sync). Returns trained_through + validation metrics. Optional query params: `tune_margin`, `start_season`, `end_season`, `through_week`. ⚠️ Default validation season is the *current* one — pass `end_season=<last season>` for a comparable metric |
+
+⭐ **Predictions are computed on demand.** The `predictions` table is empty; every payload carries `source: "live"` and is inferred from the mini's model at request time. There is no "generate week N" step — the inputs arrive with the `com.nfl.weekly` refresh (Tue + Sat 06:15). ⚠️ A feature column at `0.0` is a *value*, never an error: until 2026-09-16 every rolling feature was silently zero for the one week anyone predicts (see the backend `CLAUDE.md`, *ML features*). Current bundle (2026-09-16): val MAE 11.09, spread cover 51.6% — honest numbers after a label leak was removed; the earlier 10.66 / 55.4% were inflated.
 
 Top-level shape:
 ```json
@@ -182,6 +184,6 @@ The Mini auto-restarts the backend via launchd; the new field is live in ~30s.
 ## Known follow-ups on the backend side (not blockers for the client)
 
 - `cold`/`windy` weather features are real for live (current-week) games but always zero for historical games — Open-Meteo's free tier serves a ±9 day window. Doesn't affect serving.
-- The May 2026 model bundle is a fixed-hyperparameter retrain. A tuned retrain (`POST /api/admin/retrain-and-cache?tune_margin=true`) takes ~5 min and typically buys 0.2–0.4 pts of val MAE.
+- The Sept 2026 model bundle is a fixed-hyperparameter retrain. A tuned retrain (`POST /api/admin/retrain-and-cache?tune_margin=true`) takes ~5 min and typically buys 0.2–0.4 pts of val MAE.
 - `depth_charts` table is intentionally empty. If a client screen needs depth-chart data, the backend has the nflverse loader code but currently excludes it from the weekly refresh (nflverse rebroke the 2026 schema).
 - No retrain cron scheduled. The admin endpoint is on-demand only; add `launchd/com.nfl.retrain.plist` (Wed 03:00 ET) if/when you want a weekly cadence.
