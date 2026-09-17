@@ -44,6 +44,19 @@ season) stays the *default* only for backward-looking views (Results, Picks Hist
 ⚠️ The failure renders as an empty/wrong-year screen, not an error — it reads as "the data isn't
 there yet" when the data is fine.
 
+## Week / season selection (`Views/Components/SeasonWeekToolbar.swift`)
+
+Predictions, Results, Picks Active and Picks History share ONE toolbar component: two short
+menus, **Week first, then Season**, labels showing the current choice. `WeekSelection.currentWeek
+(for:)` opens each of them on the week in progress (Tuesday rollover → the *upcoming* slate from
+Tuesday on); off-season and other seasons fall back to week 1.
+⚠️ Until 2026-09-16 each screen carried its own copy of one combined menu with Season above
+Week. Seasons run 2026 → 1999, so the Week rows sat below 28 season rows and the only way to
+reach week 2 was to scroll the menu past 1999 — on Mac and phone alike. The control existed; it
+was unreachable, and every screen also defaulted to week 1 all season. ⭐ A picker that needs
+scrolling to reach its second section is the same bug as no picker; keep each menu shorter than a
+screen. Standings keeps its own season-only menu (no week, short list).
+
 ## Pickers
 
 Two pickers forever: **Jim** and **Tom**. No rooms, no Socket.IO. Pick state is polled (5–15s) from the picks endpoints.
