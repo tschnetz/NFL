@@ -15,8 +15,10 @@ private let kICloudKVSEnabled = true
 /// values entered on one device propagate to the user's other devices.
 ///
 /// Mirrors the Pigskin `AppSettings` pattern: local-first, cloud
-/// best-effort. Adds NFL-specific keys (`favoriteTeamAbbrs`, `appearance`,
-/// `hasCompletedOnboarding`).
+/// best-effort. Adds NFL-specific keys (`favoriteTeamAbbrs`, `appearance`).
+/// ⚰️ `activePicker` and `hasCompletedOnboarding` went with the Picks tab
+/// (2026-09-19) — the game lives in Uber Picks. Their old UserDefaults / KVS
+/// keys are simply no longer read.
 @MainActor
 @Observable
 final class AppSettings {
@@ -51,10 +53,8 @@ final class AppSettings {
 
     private enum Key {
         static let apiKey = "nfl.apiKey"
-        static let activePicker = "nfl.activePicker"
         static let favoriteTeams = "nfl.favoriteTeamAbbrs"
         static let appearance = "nfl.appearance"
-        static let hasCompletedOnboarding = "nfl.hasCompletedOnboarding"
     }
 
     private let defaults: UserDefaults
@@ -78,26 +78,12 @@ final class AppSettings {
         }
     }
 
-    var activePicker: String? {
-        didSet {
-            defaults.set(activePicker, forKey: Key.activePicker)
-            if !suppressCloudWrites, let kvs, cloudSyncStatus.isSynced {
-                kvs.set(activePicker, forKey: Key.activePicker)
-                syncCloud()
-            }
-        }
-    }
-
     var favoriteTeamAbbrs: Set<String> {
         didSet { persistFavorites() }
     }
 
     var appearance: Appearance {
         didSet { defaults.set(appearance.rawValue, forKey: Key.appearance) }
-    }
-
-    var hasCompletedOnboarding: Bool {
-        didSet { defaults.set(hasCompletedOnboarding, forKey: Key.hasCompletedOnboarding) }
     }
 
     // Diagnostic surface for Settings.
@@ -109,18 +95,14 @@ final class AppSettings {
         self.defaults = defaults
 
         let localKey = defaults.string(forKey: Key.apiKey) ?? ""
-        let localPicker = defaults.string(forKey: Key.activePicker)
         let localFavs = Set(defaults.stringArray(forKey: Key.favoriteTeams) ?? [])
         let localAppearance = Appearance(
             rawValue: defaults.string(forKey: Key.appearance) ?? ""
         ) ?? .system
-        let localOnboarded = defaults.bool(forKey: Key.hasCompletedOnboarding)
 
         self.apiKey = localKey
-        self.activePicker = localPicker
         self.favoriteTeamAbbrs = localFavs
         self.appearance = localAppearance
-        self.hasCompletedOnboarding = localOnboarded
 
         // Determine cloud availability without writing yet — the initial
         // status is set so writes know whether to mirror.
@@ -206,11 +188,6 @@ final class AppSettings {
         let cloudKey = kvs.string(forKey: Key.apiKey) ?? ""
         if !cloudKey.isEmpty && cloudKey != apiKey {
             apiKey = cloudKey
-        }
-
-        let cloudPicker = kvs.string(forKey: Key.activePicker)
-        if let cloudPicker, !cloudPicker.isEmpty, cloudPicker != activePicker {
-            activePicker = cloudPicker
         }
 
         if let cloudFavs = kvs.array(forKey: Key.favoriteTeams) as? [String] {

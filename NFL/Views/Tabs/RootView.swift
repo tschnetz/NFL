@@ -14,9 +14,6 @@ struct RootView: View {
 
             MoreView()
                 .tabItem { Label("More", systemImage: "ellipsis.circle") }
-
-            PicksView()
-                .tabItem { Label("Picks", systemImage: "checkmark.circle") }
         }
         .tabViewStyle(.sidebarAdaptable)
     }

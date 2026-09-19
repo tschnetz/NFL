@@ -22,10 +22,14 @@ propagated — `MY_PORTFOLIO.md` carried "the SwiftUI client is still a scaffold
 and `BACKEND_API.md` carried its own copy ("no frontend work has shipped yet") until 2026-08-29.
 That is why a stale doc is worse than a missing one. Re-measure before trusting a state claim here.
 
-- **Five tabs** (`Views/Tabs/RootView.swift`, Pigskin pattern): Scoreboard · Schedule · Results ·
-  More · Picks. Picks has Active / History / Standings sub-pages.
+- **Four tabs** (`Views/Tabs/RootView.swift`, Pigskin pattern): Scoreboard · Schedule · Results ·
+  More. ⚰️ **The Picks tab was removed 2026-09-19** — the game lives in Uber Picks
+  (`picks.schnetz.us`), and the backend's `/api/picks/*` routes went the same day. With it went
+  the picker onboarding, `activePicker` / `hasCompletedOnboarding` in `AppSettings` (their old
+  UserDefaults / KVS keys are simply no longer read), the offline picks queue and the `Player` enum.
 - **Structure** mirrors Pigskin: `API/APIClient.swift` (one actor), `Models/`, `Services/`,
-  `Views/{Tabs,Game,Team,Picks,Predictions,Standings,Settings,Onboarding,Components}`.
+  `Views/{Tabs,Game,Team,Predictions,Standings,Settings,Components}`. ⚠️ `Views/Standings` is the
+  LEAGUE table (`/api/standings/divisional`), not picks standings — it stays.
 - **Navigation uses closure-based `NavigationLink`s** — switched deliberately from the value-based
   form in Teams and More; follow that when adding screens.
 - Backend is **fully ready to consume** — every endpoint in `BACKEND_API.md` works against
@@ -59,7 +63,7 @@ screen. Standings keeps its own season-only menu (no week, short list).
 
 ## Pickers
 
-Two pickers forever: **Jim** and **Tom**. No rooms, no Socket.IO. Pick state is polled (5–15s) from the picks endpoints.
+⚰️ Retired 2026-09-19 with the Picks tab. Tom and Jim play in Uber Picks now.
 
 ## Conventions
 

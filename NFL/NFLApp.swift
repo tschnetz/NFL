@@ -18,16 +18,6 @@ struct NFLApp: App {
                 .environment(weekSelection)
                 .environment(settings)
                 .preferredColorScheme(settings.appearance.colorScheme)
-                .sheet(isPresented: Binding(
-                    get: { !settings.hasCompletedOnboarding },
-                    set: { newValue in
-                        if !newValue { settings.hasCompletedOnboarding = true }
-                    }
-                )) {
-                    OnboardingView()
-                        .environment(settings)
-                        .interactiveDismissDisabled(false)
-                }
         }
     }
 }

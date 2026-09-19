@@ -8,18 +8,6 @@ struct SettingsView: View {
         return NavigationStack {
             Form {
                 Section {
-                    Picker("Active picker", selection: $bindable.activePicker) {
-                        Text("None").tag(String?.none)
-                        Text("Jim").tag(String?.some("Jim"))
-                        Text("Tom").tag(String?.some("Tom"))
-                    }
-                } header: {
-                    Text("Picker")
-                } footer: {
-                    Text("Determines which picker the Picks tab highlights as ‘you.’")
-                }
-
-                Section {
                     Picker("Theme", selection: $bindable.appearance) {
                         ForEach(AppSettings.Appearance.allCases) { app in
                             Text(app.label).tag(app)
@@ -57,16 +45,6 @@ struct SettingsView: View {
                             }
                         }
                     }
-                }
-
-                Section {
-                    Button {
-                        settings.hasCompletedOnboarding = false
-                    } label: {
-                        Label("Replay onboarding", systemImage: "arrow.counterclockwise")
-                    }
-                } header: {
-                    Text("Debug")
                 }
 
                 Section {
