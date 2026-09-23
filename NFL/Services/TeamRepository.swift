@@ -37,6 +37,16 @@ final class TeamRepository {
     }
 
     func team(abbr: String) -> Team? {
-        teamsByAbbr[abbr]
+        teamsByAbbr[abbr] ?? Self.espnAlias[abbr].flatMap { teamsByAbbr[$0] }
     }
+
+    /// `/api/team` is ESPN-keyed while schedules, predictions and stats are
+    /// nflverse-keyed, and two franchises spell differently between them.
+    /// Without this, Washington rendered as "Take WAS +7" beside 31 full
+    /// team names (found 2026-09-23). Logos are asset-keyed by the nflverse
+    /// spelling and were never affected.
+    private static let espnAlias: [String: String] = [
+        "WAS": "WSH",
+        "LA": "LAR",
+    ]
 }

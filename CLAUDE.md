@@ -50,7 +50,7 @@ there yet" when the data is fine.
 
 ## Week / season selection (`Views/Components/SeasonWeekToolbar.swift`)
 
-Predictions, Results, Picks Active and Picks History share ONE toolbar component: two short
+Predictions and Results share ONE toolbar component (the two Picks screens did too, until the tab was removed 2026-09-19): two short
 menus, **Week first, then Season**, labels showing the current choice. `WeekSelection.currentWeek
 (for:)` opens each of them on the week in progress (Tuesday rollover → the *upcoming* slate from
 Tuesday on); off-season and other seasons fall back to week 1.
@@ -60,6 +60,24 @@ reach week 2 was to scroll the menu past 1999 — on Mac and phone alike. The co
 was unreachable, and every screen also defaulted to week 1 all season. ⭐ A picker that needs
 scrolling to reach its second section is the same bug as no picker; keep each menu shorter than a
 screen. Standings keeps its own season-only menu (no week, short list).
+
+## Predictions screen (`Views/Predictions/PredictionsView.swift`)
+
+One card per game for the week, kickoff order or edge order, each with the model's **spread pick
+and total pick spelled out**: the picked team's logo and full name ("Take Miami Dolphins +11.5",
+"Over 40.5"), a strength capsule, a star on the better of the two markets, and the reason on the
+second line — `Model: MIA by 6.2 · Line: KC by 11.5 · Edge 17.7`. An info button opens a legend
+(plus/minus, over/under, edge, the strength thresholds). Reads the per-game `/api/preds/{season}/
+w{week}` payload plus `/api/schedule/{season}` for kickoffs; `TeamRepository` supplies names.
+⚠️ Until 2026-09-23 it rendered the `/summary` endpoint: aggregate tiles and three top-5 lists whose
+rows showed a bare "MIA +11.5" beside the AWAY team's logo whatever the pick, with unexplained
+"edge / margin / line" numbers and no model total. It showed picks and hid which team they were on.
+⭐ The per-game payload already had everything; the summary types were deleted rather than kept.
+⚠️ `/api/team` is ESPN-keyed (`WSH`, `LAR`) while everything else is nflverse-keyed (`WAS`, `LA`) —
+`TeamRepository.team(abbr:)` aliases them; logos are asset-keyed by the nflverse spelling.
+⚠️ Strength is a threshold on the edge (≥3 Strong · ≥2 Medium · ≥1 Lean) inherited from the legacy
+app; with a model whose honest error is ~11 points it flags nearly every spread Strong (15 of 16 in
+2026 week 3). A tuning question for the backend, not the view.
 
 ## Pickers
 

@@ -20,8 +20,16 @@ nonisolated struct GamePrediction: Decodable, Identifiable, Sendable {
     let overUnderLine: Double?
 
     let predHomeMargin: Double
+    let predTotalPoints: Double?
     let predHomeWinProb: Double?
     let predCoverProbCal: Double?
+    /// Points the model disagrees with the market by. Spread: model home
+    /// margin minus the line (positive ⇒ home covers). Total: model total
+    /// minus the O/U line (positive ⇒ Over). Strength is a threshold on
+    /// the absolute value (≥3 Strong · ≥2 Medium · ≥1 Lean), so these are
+    /// the numbers the strength capsules are made of.
+    let spreadEdge: Double?
+    let totalEdge: Double?
 
     let spreadPick: String?
     let spreadBetStrength: String?
@@ -49,6 +57,9 @@ nonisolated struct GamePrediction: Decodable, Identifiable, Sendable {
         case spreadLine = "spread_line"
         case overUnderLine = "over_under_line"
         case predHomeMargin = "pred_home_margin"
+        case predTotalPoints = "pred_total_points"
+        case spreadEdge = "spread_edge"
+        case totalEdge = "total_edge"
         case predHomeWinProb = "pred_home_win_prob"
         case predCoverProbCal = "pred_cover_prob_cal"
         case spreadPick = "spread_pick"
@@ -91,63 +102,37 @@ extension GamePrediction {
     var bestBetStrengthValue: Strength? {
         bestBetStrength.flatMap(Strength.init)
     }
-}
 
-// MARK: - Predictions weekly summary (from /api/preds/summary/...)
+    var spreadStrengthValue: Strength? { spreadBetStrength.flatMap(Strength.init) }
+    var totalStrengthValue: Strength? { totalBetStrength.flatMap(Strength.init) }
 
-nonisolated struct PredictionsSummary: Decodable, Sendable {
-    let season: Int
-    let week: Int
-    let seasonType: String?
-    let version: String?
-    let games: Int
-    let strength: [String: Int]
-    let spread: StrengthBucket
-    let total: TotalBucket
-    let topSpreads: [SummaryRow]
-    let topTotals: [SummaryRow]
-    let topBestBets: [SummaryRow]
-
-    func strengthCount(_ key: GamePrediction.Strength) -> Int {
-        strength[key.rawValue] ?? 0
-    }
-}
-
-nonisolated struct StrengthBucket: Decodable, Sendable {
-    let byStrength: [String: Int]
-}
-
-nonisolated struct TotalBucket: Decodable, Sendable {
-    let byStrength: [String: Int]
-    let overCount: Int
-    let underCount: Int
-}
-
-nonisolated struct SummaryRow: Decodable, Identifiable, Sendable {
-    let gameId: String?
-    let espnId: Int?
-    let homeTeam: String?
-    let awayTeam: String?
-    let pick: String?
-    let market: String?
-    let strength: String?
-    let edge: Double?
-    let predHomeMargin: Double?
-    let line: Double?
-
-    var id: String {
-        if let gameId { return gameId }
-        if let espnId { return String(espnId) }
-        return "\(homeTeam ?? "")_\(awayTeam ?? "")_\(pick ?? "")"
+    /// The team the spread pick is on. The backend's convention (``best_bets.py``):
+    /// a non-negative ``spread_edge`` ⇒ home covers ⇒ pick home; negative ⇒ away.
+    /// Nil when the pick is a PASS (no line, or no edge).
+    var spreadPickTeam: String? {
+        guard let edge = spreadEdge, spreadLine != nil, spreadPick != "PASS" else { return nil }
+        return edge >= 0 ? homeTeam : awayTeam
     }
 
-    var strengthValue: GamePrediction.Strength? {
-        strength.flatMap(GamePrediction.Strength.init)
+    /// Which market the best bet is in, or nil when both are PASS.
+    var bestBetIsSpread: Bool? {
+        switch bestBetMarket {
+        case "spread": true
+        case "total": false
+        default: nil
+        }
     }
 
-    enum CodingKeys: String, CodingKey {
-        case gameId, homeTeam, awayTeam, pick, market, strength, edge,
-             predHomeMargin, line
-        case espnId = "id"
+    /// The model's predicted winner and margin, e.g. ("MIA", 6.3). Nil margin ⇒ pick 'em.
+    var modelFavorite: (team: String, by: Double)? {
+        let m = predHomeMargin
+        if abs(m) < 0.05 { return nil }
+        return m > 0 ? (homeTeam, m) : (awayTeam, -m)
+    }
+
+    /// The market's favorite and margin from ``spreadLine`` (nflverse: positive ⇒ home favored).
+    var marketFavorite: (team: String, by: Double)? {
+        guard let line = spreadLine, abs(line) >= 0.05 else { return nil }
+        return line > 0 ? (homeTeam, line) : (awayTeam, -line)
     }
 }

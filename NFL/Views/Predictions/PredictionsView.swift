@@ -1,9 +1,35 @@
 import SwiftUI
 
+/// One row per game for the week, each with the model's spread pick and
+/// total pick spelled out — which team, at what line, and WHY (model
+/// number vs. market number, and the edge between them).
+///
+/// ⚠️ Until 2026-09-23 this screen rendered the `/api/preds/summary`
+/// payload: aggregate strength tiles plus three top-5 lists whose rows
+/// showed a bare "MIA +11.5" beside the AWAY team's logo whatever the
+/// pick, with "edge" / "margin" / "line" numbers and no model total. It
+/// showed the picks but hid which team they were on and never said why.
+/// The per-game payload already carried everything needed.
 @MainActor
 @Observable
 final class PredictionsViewModel {
-    var state: LoadState<PredictionsSummary> = .idle
+    enum Sort: String, CaseIterable, Identifiable {
+        case kickoff = "Kickoff"
+        case edge = "Edge"
+        var id: String { rawValue }
+    }
+
+    struct Week: Sendable {
+        let season: Int
+        let week: Int
+        let games: [GamePrediction]
+        /// Kickoff by ESPN event id, from the schedule endpoint (the
+        /// predictions payload carries no date).
+        let kickoffs: [Int: Date]
+    }
+
+    var state: LoadState<Week> = .idle
+    var sort: Sort = .kickoff
 
     private let client: APIClient
 
@@ -13,19 +39,48 @@ final class PredictionsViewModel {
 
     func load(season: Int, week: Int) async {
         state = .loading
+        async let teams: () = TeamRepository.shared.ensureLoaded()
+        async let preds: PredictionsResponse = client.get("/api/preds/\(season)/w\(week)")
+        async let schedule: ScheduleResponse? = try? client.get("/api/schedule/\(season)")
         do {
-            let path = "/api/preds/summary/\(season)/w\(week)"
-            let summary: PredictionsSummary = try await client.get(path)
-            state = .loaded(summary)
+            let response = try await preds
+            let sched = await schedule
+            _ = await teams
+            let kickoffs = Dictionary(
+                (sched?.games ?? [])
+                    .filter { $0.week == week }
+                    .map { ($0.espnId, $0.kickoff) },
+                uniquingKeysWith: { a, _ in a }
+            )
+            state = .loaded(Week(season: season, week: week,
+                                 games: response.predictions, kickoffs: kickoffs))
         } catch {
             state = .failed(error.localizedDescription)
         }
+    }
+
+    func sorted(_ week: Week) -> [GamePrediction] {
+        switch sort {
+        case .kickoff:
+            week.games.sorted {
+                let a = week.kickoffs[$0.espnId] ?? .distantFuture
+                let b = week.kickoffs[$1.espnId] ?? .distantFuture
+                return a == b ? $0.gameId < $1.gameId : a < b
+            }
+        case .edge:
+            week.games.sorted { abs($0.bestBetEdge ?? 0) > abs($1.bestBetEdge ?? 0) }
+        }
+    }
+
+    func strengthCount(_ week: Week, _ s: GamePrediction.Strength) -> Int {
+        week.games.filter { $0.bestBetStrengthValue == s }.count
     }
 }
 
 struct PredictionsView: View {
     @Environment(WeekSelection.self) private var selection
     @State private var model = PredictionsViewModel()
+    @State private var showLegend = false
 
     var body: some View {
         @Bindable var selection = selection
@@ -36,6 +91,15 @@ struct PredictionsView: View {
                     SeasonWeekToolbar(season: $selection.year, week: $selection.week,
                                       seasons: selection.availableSeasons,
                                       weeks: selection.availableWeeks)
+                    ToolbarItem(placement: .primaryAction) {
+                        Button("How to read these", systemImage: "info.circle") {
+                            showLegend = true
+                        }
+                        .popover(isPresented: $showLegend) {
+                            PredictionsLegend()
+                                .presentationCompactAdaptation(.popover)
+                        }
+                    }
                 }
                 .task(id: pivotKey) {
                     await model.load(season: selection.year, week: selection.week)
@@ -57,206 +121,240 @@ struct PredictionsView: View {
             ContentUnavailableView("Couldn’t load predictions",
                                    systemImage: "wifi.exclamationmark",
                                    description: Text(message))
-        case .loaded(let summary) where summary.games == 0:
+        case .loaded(let week) where week.games.isEmpty:
             ContentUnavailableView("No predictions",
                                    systemImage: "chart.bar.xaxis",
-                                   description: Text("Nothing graded for week \(summary.week) of \(String(summary.season))."))
-        case .loaded(let summary):
+                                   description: Text("Nothing graded for week \(week.week) of \(String(week.season))."))
+        case .loaded(let week):
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    summaryCard(summary)
-                    strengthTiles(summary)
-                    overUnderSplit(summary)
-                    topList("Top best bets", rows: summary.topBestBets, valueKey: .edge, showMarket: true)
-                    topList("Top spreads", rows: summary.topSpreads, valueKey: .margin)
-                    topList("Top totals", rows: summary.topTotals, valueKey: .line)
+                    header(week)
+                    Picker("Sort", selection: $model.sort) {
+                        ForEach(PredictionsViewModel.Sort.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    ForEach(model.sorted(week)) { game in
+                        GamePickCard(game: game, kickoff: week.kickoffs[game.espnId])
+                    }
                 }
                 .padding(16)
             }
         }
     }
 
-    // MARK: - Cards
-
-    private func summaryCard(_ summary: PredictionsSummary) -> some View {
+    private func header(_ week: PredictionsViewModel.Week) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Week \(summary.week) · \(String(summary.season))")
+                Text("Week \(week.week) · \(String(week.season))")
                     .font(.title3.weight(.semibold))
                 Spacer()
-                Text("\(summary.games) games")
+                Text("\(week.games.count) games")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                    .monospacedDigit()
             }
-            if let version = summary.version {
-                Text("Model v\(version)")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+            // Best-bet strength mix for the week — a one-line summary, not a
+            // dashboard. Strength is a threshold on the edge (see the legend).
+            HStack(spacing: 10) {
+                ForEach([GamePrediction.Strength.strong, .medium, .lean, .pass], id: \.rawValue) { s in
+                    HStack(spacing: 4) {
+                        Text("\(model.strengthCount(week, s))")
+                            .font(.subheadline.weight(.semibold))
+                            .monospacedDigit()
+                            .foregroundStyle(s.color)
+                        Text(s.rawValue)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
         }
-        .padding(16)
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.background.secondary, in: .rect(cornerRadius: 14))
     }
+}
 
-    private func strengthTiles(_ summary: PredictionsSummary) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionHeader("Best bet strength")
-            HStack(spacing: 8) {
-                strengthTile(.strong, count: summary.strengthCount(.strong))
-                strengthTile(.medium, count: summary.strengthCount(.medium))
-                strengthTile(.lean, count: summary.strengthCount(.lean))
-                strengthTile(.pass, count: summary.strengthCount(.pass))
-            }
-        }
-    }
+// MARK: - Game card
 
-    private func strengthTile(_ strength: GamePrediction.Strength, count: Int) -> some View {
-        VStack(spacing: 4) {
-            Text("\(count)")
-                .font(.title2.weight(.bold))
-                .monospacedDigit()
-                .foregroundStyle(strengthColor(strength))
-            Text(strength.rawValue)
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
-        .background(strengthColor(strength).opacity(0.12), in: .rect(cornerRadius: 12))
-    }
+/// Matchup line + two pick rows (spread, total). The picked team leads its
+/// row; the second line is the reason: model number · market number · edge.
+private struct GamePickCard: View {
+    let game: GamePrediction
+    let kickoff: Date?
 
-    private func overUnderSplit(_ summary: PredictionsSummary) -> some View {
-        HStack(spacing: 12) {
-            tile(label: "Over", value: "\(summary.total.overCount)", color: .blue)
-            tile(label: "Under", value: "\(summary.total.underCount)", color: .indigo)
-        }
-    }
-
-    private func tile(label: String, value: String, color: Color) -> some View {
-        HStack {
-            Text(label)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(color)
-            Spacer()
-            Text(value)
-                .font(.title3.weight(.semibold))
-                .monospacedDigit()
-                .foregroundStyle(color)
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            matchup
+            Divider()
+            spreadRow
+            Divider()
+            totalRow
         }
         .padding(14)
-        .background(.background.secondary, in: .rect(cornerRadius: 12))
+        .background(.background.secondary, in: .rect(cornerRadius: 14))
     }
 
-    // MARK: - Top lists
-
-    private enum ValueKey { case edge, margin, line }
-
-    private func topList(_ title: String,
-                         rows: [SummaryRow],
-                         valueKey: ValueKey,
-                         showMarket: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title)
-            if rows.isEmpty {
-                Text("Nothing to rank.")
+    private var matchup: some View {
+        HStack(spacing: 8) {
+            TeamLogoView(abbr: game.awayTeam, size: 22)
+            Text(game.awayTeam)
+                .font(.subheadline.weight(.semibold))
+            Text("@")
+                .font(.subheadline)
+                .foregroundStyle(.tertiary)
+            TeamLogoView(abbr: game.homeTeam, size: 22)
+            Text(game.homeTeam)
+                .font(.subheadline.weight(.semibold))
+            Spacer()
+            if let kickoff {
+                Text(kickoff, format: .dateTime.weekday(.abbreviated).hour().minute())
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .padding(.vertical, 4)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(rows) { row in
-                        rowView(row, valueKey: valueKey, showMarket: showMarket)
-                        if row.id != rows.last?.id {
-                            Divider().padding(.leading, 8)
-                        }
-                    }
-                }
-                .background(.background.secondary, in: .rect(cornerRadius: 14))
+                    .foregroundStyle(.secondary)
             }
         }
     }
 
-    private func rowView(_ row: SummaryRow,
-                         valueKey: ValueKey,
-                         showMarket: Bool) -> some View {
-        HStack(spacing: 10) {
-            if let away = row.awayTeam {
-                TeamLogoView(abbr: away, size: 22)
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(row.pick ?? "—")
-                        .font(.subheadline.weight(.semibold))
-                    if showMarket, let market = row.market {
-                        Text(market.uppercased())
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-                if let away = row.awayTeam, let home = row.homeTeam {
-                    Text("\(away) @ \(home)")
-                        .font(.caption2)
+    // Spread: "Take Miami +11.5" — Model: MIA by 6.3 · Line: KC by 11.5 · Edge 17.8
+    private var spreadRow: some View {
+        let team = game.spreadPickTeam
+        let title: String = {
+            guard let team, let pick = game.spreadPick else { return "No spread pick" }
+            let line = pick.split(separator: " ").dropFirst().joined(separator: " ")
+            return "Take \(displayName(team)) \(line)"
+        }()
+        let reason: String = {
+            var parts: [String] = []
+            parts.append("Model: " + (game.modelFavorite.map { "\($0.team) by \(fmt($0.by))" } ?? "pick ’em"))
+            parts.append("Line: " + (game.marketFavorite.map { "\($0.team) by \(fmt($0.by))" } ?? "pick ’em"))
+            if let e = game.spreadEdge { parts.append("Edge \(fmt(abs(e)))") }
+            return parts.joined(separator: " · ")
+        }()
+        return PickRow(kind: "Spread",
+                       leading: team.map { .team($0) } ?? .none,
+                       title: title, reason: reason,
+                       strength: game.spreadStrengthValue,
+                       isBestBet: game.bestBetIsSpread == true)
+    }
+
+    // Total: "Over 40.5" — Model 48.0 · Edge +7.5
+    private var totalRow: some View {
+        let pick = game.totalPick ?? "PASS"
+        let isPass = pick == "PASS" || game.overUnderLine == nil
+        let title = isPass ? "No total pick"
+            : "\(pick) \(fmt(game.overUnderLine ?? 0))"
+        var parts: [String] = []
+        if let t = game.predTotalPoints { parts.append("Model \(fmt(t))") }
+        if let l = game.overUnderLine, isPass { parts.append("Line \(fmt(l))") }
+        if let e = game.totalEdge { parts.append("Edge \(e >= 0 ? "+" : "−")\(fmt(abs(e)))") }
+        return PickRow(kind: "Total",
+                       leading: isPass ? .none : .symbol(pick == "Over" ? "arrow.up.circle.fill" : "arrow.down.circle.fill"),
+                       title: title, reason: parts.joined(separator: " · "),
+                       strength: game.totalStrengthValue,
+                       isBestBet: game.bestBetIsSpread == false)
+    }
+
+    private func displayName(_ abbr: String) -> String {
+        TeamRepository.shared.team(abbr: abbr)?.displayName ?? abbr
+    }
+
+    private func fmt(_ v: Double) -> String {
+        v.rounded() == v ? String(format: "%.0f", v) : String(format: "%.1f", v)
+    }
+}
+
+private struct PickRow: View {
+    enum Leading { case team(String), symbol(String), none }
+
+    let kind: String
+    let leading: Leading
+    let title: String
+    let reason: String
+    let strength: GamePrediction.Strength?
+    let isBestBet: Bool
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Group {
+                switch leading {
+                case .team(let abbr): TeamLogoView(abbr: abbr, size: 26)
+                case .symbol(let name):
+                    Image(systemName: name)
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                case .none:
+                    Image(systemName: "minus.circle")
+                        .font(.title3)
                         .foregroundStyle(.tertiary)
                 }
             }
-            Spacer()
-            if let strength = row.strengthValue {
-                strengthCapsule(strength)
+            .frame(width: 26, height: 26)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(kind)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .textCase(.uppercase)
+                    if isBestBet {
+                        Label("Best bet", systemImage: "star.fill")
+                            .font(.caption2.weight(.semibold))
+                            .labelStyle(.iconOnly)
+                            .foregroundStyle(.yellow)
+                            .accessibilityLabel("Best bet")
+                    }
+                }
+                Text(title)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(strength == .pass || strength == nil ? .secondary : .primary)
+                Text(reason)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
             }
-            valueLabel(for: row, key: valueKey)
+            Spacer(minLength: 0)
+            if let strength {
+                Text(strength.rawValue)
+                    .font(.caption2.weight(.semibold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(strength.color.opacity(0.18), in: Capsule())
+                    .foregroundStyle(strength.color)
+            }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
         .accessibilityElement(children: .combine)
     }
+}
 
-    private func valueLabel(for row: SummaryRow, key: ValueKey) -> some View {
-        let text: String
-        let caption: String
-        switch key {
-        case .edge:
-            text = row.edge.map { String(format: "%+.1f", $0) } ?? "—"
-            caption = "edge"
-        case .margin:
-            text = row.predHomeMargin.map { String(format: "%+.1f", $0) } ?? "—"
-            caption = "margin"
-        case .line:
-            text = row.line.map { String(format: "%.1f", $0) } ?? "—"
-            caption = "line"
+// MARK: - Legend
+
+private struct PredictionsLegend: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("How to read these")
+                .font(.headline)
+            legendRow("Take Miami +11.5",
+                      "Bet Miami. Plus means Miami gets those points (the underdog); minus means laying them (the favorite).")
+            legendRow("Over 40.5",
+                      "Bet the two teams combine for more than 40.5 points. Under is the opposite.")
+            legendRow("Model · Line · Edge",
+                      "What the model predicts, what Vegas says, and the gap between them in points. The bigger the edge, the more the model disagrees with the market.")
+            legendRow("Strong / Medium / Lean / Pass",
+                      "Edge of 3+ points, 2+, 1+, or under 1. The star marks the better of the two markets for that game.")
         }
-        return VStack(alignment: .trailing, spacing: 2) {
-            Text(text)
-                .font(.callout.weight(.semibold))
-                .monospacedDigit()
-            Text(caption)
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .textCase(.uppercase)
+        .padding(16)
+        .frame(maxWidth: 360, alignment: .leading)
+    }
+
+    private func legendRow(_ term: String, _ meaning: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(term).font(.subheadline.weight(.semibold))
+            Text(meaning).font(.caption).foregroundStyle(.secondary)
         }
     }
+}
 
-    // MARK: - Bits
-
-    private func sectionHeader(_ text: String) -> some View {
-        Text(text)
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(.secondary)
-            .textCase(.uppercase)
-    }
-
-    private func strengthCapsule(_ strength: GamePrediction.Strength) -> some View {
-        Text(strength.rawValue)
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(strengthColor(strength).opacity(0.18), in: Capsule())
-            .foregroundStyle(strengthColor(strength))
-    }
-
-    private func strengthColor(_ strength: GamePrediction.Strength) -> Color {
-        switch strength {
+extension GamePrediction.Strength {
+    var color: Color {
+        switch self {
         case .strong: .green
         case .medium: .blue
         case .lean: .orange

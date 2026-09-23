@@ -32,6 +32,8 @@ All read endpoints are cached server-side via the Postgres `api_cache` table (no
 | GET | `/api/scoreboard/week/{year}/{week}` | All games for a regular-season week |
 | GET | `/api/scoreboard/year/{year}` | All scoreboards for a season |
 | GET | `/api/schedule/{season}` | Full-season schedule from nflverse `games_historical` |
+
+⚠️ `kickoff` is a true instant: nflverse `gametime` is Eastern wall-clock and the loader stamps it `America/New_York` (since 2026-09-23 — before that it was tagged UTC, so every client kickoff rendered **four hours early** on an Eastern device while the ESPN-fed Scoreboard was right). Format it in the device zone; never re-shift it.
 | GET | `/api/schedule/team/{ABBR}` | One team's full season |
 | GET | `/api/standings` | League standings (flat). `?season=` + `?seasonType=`; defaults to the current season |
 | GET | `/api/standings/divisional` | Same data grouped AFC/NFC → division. What `StandingsView` renders |
