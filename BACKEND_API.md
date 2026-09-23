@@ -130,7 +130,7 @@ Each `<game>` object carries the full calibration payload (May 2026 model, val M
 ```
 
 **Sign conventions you'll trip on:**
-- `spread_line` follows nflverse: **home minus away**, so a `-3.5` spread = home is favored by 3.5. The pre-rendered `spread_pick` string (`"SEA +3.5"`) already does the math; prefer it over re-computing in the client.
+- `spread_line` follows nflverse: the **market's expected home margin — positive = home favored** by that many, so `+6` = home favored by 6 and `-11.5` = home is an 11.5-point underdog. ⚠️ This line said the opposite ("`-3.5` = home favored") until 2026-09-23, and the backend's market blend was ported to match it — every served spread pick sat on the wrong side of both the model and Vegas (see the backend `CLAUDE.md`). Verified against results: sign(spread_line) matched sign(actual home margin) 65% of the time in 2025. The pre-rendered `spread_pick` string (`"SEA +3.5"`) already does the math; prefer it over re-computing in the client.
 - `pred_home_margin` > 0 ⇒ home wins by that many; ⇒ the model thinks home covers when `pred_home_margin > -spread_line`.
 - `best_bet_strength` ∈ `{"Strong", "Medium", "Lean", "Pass"}` (edge thresholds 3 / 2 / 1 / <1).
 - `kelly_fraction` capped at 0.01 (1% of bankroll). Render as `Int(fraction * 10000)` "units" if you want integer presentation.
