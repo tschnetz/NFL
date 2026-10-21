@@ -75,6 +75,17 @@ rows showed a bare "MIA +11.5" beside the AWAY team's logo whatever the pick, wi
 ⭐ The per-game payload already had everything; the summary types were deleted rather than kept.
 ⚠️ `/api/team` is ESPN-keyed (`WSH`, `LAR`) while everything else is nflverse-keyed (`WAS`, `LA`) —
 `TeamRepository.team(abbr:)` aliases them; logos are asset-keyed by the nflverse spelling.
+**Top 7 picks** (added 2026-10-21) sits above the game cards: the week's seven largest absolute
+edges drawn from BOTH markets — every game offers a spread pick and a total pick, so one game can
+appear twice. Tom's rule, chosen over the alternatives knowingly. Once a game is final in
+`/api/schedule` each row is graded (✓ won · × lost · = push) and the header keeps the record.
+`MarketPick` is the one place a pick is spelled out and graded, shared by the cards and the Top 7.
+⚠️⚠️ **Measured 2026-10-21 over 2026 weeks 1–6 (out of sample — the model trained through 2025):
+this rule went 11/42, and 38 of the 42 picks were TOTALS**, because total edges run larger than
+spread edges. The totals model itself hit 34/93 (37%), its edge correlates −0.17 with actual-minus-
+line, and its error (12.8) is worse than the line's (10.6). The Top 7 is only as good as the totals
+model; the fix belongs in the backend, and the list improves without a client change. For
+comparison, the model's most-confident straight-up winners went 30/42.
 ⚠️ Strength is a threshold on the edge (≥3 Strong · ≥2 Medium · ≥1 Lean) inherited from the legacy
 app; with a model whose honest error is ~11 points it flags nearly every spread Strong (15 of 16 in
 2026 week 3). A tuning question for the backend, not the view.
