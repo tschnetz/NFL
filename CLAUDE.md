@@ -83,9 +83,10 @@ appear twice. Tom's rule, chosen over the alternatives knowingly. Once a game is
 ⚠️⚠️ **Measured 2026-10-21 over 2026 weeks 1–6 (out of sample — the model trained through 2025):
 this rule went 11/42, and 38 of the 42 picks were TOTALS**, because total edges run larger than
 spread edges. The totals model itself hit 34/93 (37%), its edge correlates −0.17 with actual-minus-
-line, and its error (12.8) is worse than the line's (10.6). The Top 7 is only as good as the totals
-model; the fix belongs in the backend, and the list improves without a client change. For
-comparison, the model's most-confident straight-up winners went 30/42.
+line, and its error (12.8) is worse than the line's (10.6). The backend fixed that the same day
+(totals = line + a fitted nudge; bundle `20261021-225510`), with no client change: the same weeks
+replayed went **19/39, all 42 picks spreads**. Still a coin flip — read the Top 7 as "where the
+model disagrees with Vegas most", not as a betting edge.
 ⚠️ Strength is a threshold on the edge (≥3 Strong · ≥2 Medium · ≥1 Lean) inherited from the legacy
 app; with a model whose honest error is ~11 points it flags nearly every spread Strong (15 of 16 in
 2026 week 3). A tuning question for the backend, not the view.
