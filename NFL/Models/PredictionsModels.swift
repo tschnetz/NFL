@@ -46,6 +46,14 @@ nonisolated struct GamePrediction: Decodable, Identifiable, Sendable {
     let marginCi80Upper: Double?
     let kellyFraction: Double?
 
+    /// Availability news the model hadn't seen yet (backend `app.ml.news`): the
+    /// share of the model's disagreement with the line it gave up for this game
+    /// (0–1), the players behind it, and whether the news check was current.
+    /// Absent for played weeks and when the adjustment is off.
+    let newsShrink: Double?
+    let newsPlayers: [NewsPlayer]?
+    let newsStatus: String?
+
     var id: String { gameId }
 
     enum CodingKeys: String, CodingKey {
@@ -75,7 +83,22 @@ nonisolated struct GamePrediction: Decodable, Identifiable, Sendable {
         case marginCi80Lower = "margin_ci_80_lower"
         case marginCi80Upper = "margin_ci_80_upper"
         case kellyFraction = "kelly_fraction"
+        case newsShrink = "news_shrink"
+        case newsPlayers = "news_players"
+        case newsStatus = "news_status"
     }
+}
+
+nonisolated struct NewsPlayer: Decodable, Hashable, Sendable {
+    let name: String
+    let team: String?
+    let position: String?
+    /// "out" or "back".
+    let direction: String
+    /// "rotowire" or "transaction".
+    let source: String
+    let detail: String?
+    let significance: Double?
 }
 
 extension GamePrediction {
@@ -134,5 +157,18 @@ extension GamePrediction {
     var marketFavorite: (team: String, by: Double)? {
         guard let line = spreadLine, abs(line) >= 0.05 else { return nil }
         return line > 0 ? (homeTeam, line) : (awayTeam, -line)
+    }
+
+    /// Whether unseen news pulled this game toward the line at all.
+    var newsAdjusted: Bool { (newsShrink ?? 0) > 0.005 && !(newsPlayers ?? []).isEmpty }
+
+    /// "Hurts out, Lane Johnson out → 98% toward the line" — nil when nothing moved.
+    var newsSummary: String? {
+        guard newsAdjusted, let shrink = newsShrink, let players = newsPlayers else { return nil }
+        let names = players.map { p in
+            let last = p.name.split(separator: " ").last.map(String.init) ?? p.name
+            return "\(last) \(p.direction == "back" ? "back" : "out")"
+        }
+        return "\(names.joined(separator: ", ")) → \(Int((shrink * 100).rounded()))% toward the line"
     }
 }

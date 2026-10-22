@@ -163,6 +163,8 @@ struct MarketPick: Identifiable {
             parts.append("Model: " + (game.modelFavorite.map { "\($0.team) by \(Self.fmt($0.by))" } ?? "pick ’em"))
             parts.append("Line: " + (game.marketFavorite.map { "\($0.team) by \(Self.fmt($0.by))" } ?? "pick ’em"))
             if let e = game.spreadEdge { parts.append("Edge \(Self.fmt(abs(e)))") }
+            // Unseen availability news pulled the spread toward the line (totals untouched).
+            if let news = game.newsSummary { parts.append("News: \(news)") }
         case .total:
             if let t = game.predTotalPoints { parts.append("Model \(Self.fmt(t))") }
             if let l = game.overUnderLine, isPass { parts.append("Line \(Self.fmt(l))") }
@@ -373,6 +375,12 @@ private struct GamePickCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             matchup
+            if let news = game.newsSummary {
+                Label(news, systemImage: "newspaper")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("Availability news: \(news)")
+            }
             Divider()
             row(MarketPick(game: game, market: .spread))
             Divider()

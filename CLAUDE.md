@@ -87,6 +87,10 @@ line, and its error (12.8) is worse than the line's (10.6). The backend fixed th
 (totals = line + a fitted nudge; bundle `20261021-225510`), with no client change: the same weeks
 replayed went **19/39, all 42 picks spreads**. Still a coin flip — read the Top 7 as "where the
 model disagrees with Vegas most", not as a betting edge.
+**News line** (2026-10-21): when the backend pulled a game toward the line for availability news
+the model hadn't seen (`news_shrink`, `news_players` — backend `CLAUDE.md` *News adjustment*), the
+card shows "Johnson out → 40% toward the line" under the matchup and the spread reason repeats it,
+so the Top 7 row says why its edge shrank. All three fields are optional; older payloads decode.
 ⚠️ Strength is a threshold on the edge (≥3 Strong · ≥2 Medium · ≥1 Lean) inherited from the legacy
 app; with a model whose honest error is ~11 points it flags nearly every spread Strong (15 of 16 in
 2026 week 3). A tuning question for the backend, not the view.
