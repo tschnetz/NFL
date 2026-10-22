@@ -165,8 +165,11 @@ extension GamePrediction {
     /// "Hurts out, Lane Johnson out → 98% toward the line" — nil when nothing moved.
     var newsSummary: String? {
         guard newsAdjusted, let shrink = newsShrink, let players = newsPlayers else { return nil }
+        // Surname, skipping a suffix — "Marvin Harrison Jr." read "Jr. out".
+        let suffixes: Set<String> = ["jr", "jr.", "sr", "sr.", "ii", "iii", "iv", "v"]
         let names = players.map { p in
-            let last = p.name.split(separator: " ").last.map(String.init) ?? p.name
+            let words = p.name.split(separator: " ").map(String.init)
+            let last = words.last { !suffixes.contains($0.lowercased()) } ?? p.name
             return "\(last) \(p.direction == "back" ? "back" : "out")"
         }
         return "\(names.joined(separator: ", ")) → \(Int((shrink * 100).rounded()))% toward the line"
